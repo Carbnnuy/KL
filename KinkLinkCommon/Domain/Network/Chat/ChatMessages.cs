@@ -43,7 +43,7 @@ public record ChatSendMessageResponse(
 
 /// This DTO is sent from the server to the client for chat messages
 [MessagePackObject]
-public record ChatReceivedMessage(
+public record ChatMessageCommand(
     [property: Key(0)] string Alias,
     [property: Key(1)] string Message,
     [property: Key(2)] DateTime Timestamp

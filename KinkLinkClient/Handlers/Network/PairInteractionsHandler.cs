@@ -24,7 +24,7 @@ public class PairInteractionsHandler : IDisposable
     private readonly WardrobeService _wardrobeService;
     private readonly IDisposable _applyInteractionHandler;
 
-    public event Action<ApplyInteractionCommand, ActionResult<Unit>>? OnInteractionReceived;
+    public event Action<ApplyInteractionRequest, ActionResult<Unit>>? OnInteractionReceived;
 
     public PairInteractionsHandler(
         LogService log,
@@ -37,33 +37,33 @@ public class PairInteractionsHandler : IDisposable
         _wardrobeService = wardrobeService;
 
         _applyInteractionHandler = network.Connection.On<
-            ApplyInteractionCommand,
+            ApplyInteractionRequest,
             ActionResult<Unit>
         >(HubMethod.ApplyInteraction, HandleApplyInteraction);
     }
 
-    private async Task<ActionResult<Unit>> HandleApplyInteraction(ApplyInteractionCommand command)
+    private async Task<ActionResult<Unit>> HandleApplyInteraction(ApplyInteractionRequest request)
     {
-        var sender = command.TargetFriendCode;
+        var sender = request.TargetFriendCode;
         _log.Custom($"{sender} applied interaction to you");
 
-        if (command.Action == PairAction.ApplyWardrobe)
+        if (request.Action == PairAction.ApplyWardrobe)
         {
-            if (command.Payload == null)
+            if (request.Payload == null)
             {
                 Plugin.Log.Warning("[PairInteractions] ApplyWardrobe but payload is null");
             }
-            else if (command.Payload.WardrobeItems == null)
+            else if (request.Payload.WardrobeItems == null)
             {
                 Plugin.Log.Warning("[PairInteractions] ApplyWardrobe but WardrobeItems is null");
             }
             else
             {
-                await HandleApplyWardrobeAsync(command.Payload.WardrobeItems);
+                await HandleApplyWardrobeAsync(request.Payload.WardrobeItems);
             }
         }
 
-        OnInteractionReceived?.Invoke(command, ActionResultBuilder.Ok(Unit.Empty));
+        OnInteractionReceived?.Invoke(request, ActionResultBuilder.Ok(Unit.Empty));
         return ActionResultBuilder.Ok(Unit.Empty);
     }
 

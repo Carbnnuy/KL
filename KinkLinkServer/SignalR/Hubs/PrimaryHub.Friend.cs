@@ -30,7 +30,7 @@ public partial class PrimaryHub
     }
 
     [HubMethodName(HubMethod.RemoveFriend)]
-    public async Task<RemovePair> RemoveFriend(RemoveFriendRequest request)
+    public async Task<RemoveFriendResponse> RemoveFriend(RemoveFriendRequest request)
     {
         var stopwatch = Stopwatch.StartNew();
         var friendCode = FriendCode;

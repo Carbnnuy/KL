@@ -38,8 +38,15 @@ public partial class PrimaryHub
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            logger.LogTrace("[SignalR] QueryPairState: {FriendCode} -> {Target}", FriendCode, request.TargetFriendCode);
-            if (isValidPair<QueryPairStateResponse>(FriendCode, request.TargetFriendCode) is { } result)
+            logger.LogTrace(
+                "[SignalR] QueryPairState: {FriendCode} -> {Target}",
+                FriendCode,
+                request.TargetFriendCode
+            );
+            if (
+                isValidPair<QueryPairStateResponse>(FriendCode, request.TargetFriendCode) is
+                { } result
+            )
             {
                 return result;
             }
@@ -49,7 +56,10 @@ public partial class PrimaryHub
         {
             stopwatch.Stop();
             metricsService.IncrementSignalRMessage("QueryPairState", true);
-            metricsService.RecordSignalRMessageDuration("QueryPairState", stopwatch.ElapsedMilliseconds);
+            metricsService.RecordSignalRMessageDuration(
+                "QueryPairState",
+                stopwatch.ElapsedMilliseconds
+            );
         }
     }
 
@@ -61,7 +71,11 @@ public partial class PrimaryHub
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            logger.LogTrace("[SignalR] QueryWardrobeState: {FriendCode} -> {Target}", FriendCode, request.TargetFriendCode);
+            logger.LogTrace(
+                "[SignalR] QueryWardrobeState: {FriendCode} -> {Target}",
+                FriendCode,
+                request.TargetFriendCode
+            );
             if (
                 isValidPair<QueryPairWardrobeStateResponse>(FriendCode, request.TargetFriendCode) is
                 { } result
@@ -75,7 +89,10 @@ public partial class PrimaryHub
         {
             stopwatch.Stop();
             metricsService.IncrementSignalRMessage("QueryPairWardrobeState", true);
-            metricsService.RecordSignalRMessageDuration("QueryPairWardrobeState", stopwatch.ElapsedMilliseconds);
+            metricsService.RecordSignalRMessageDuration(
+                "QueryPairWardrobeState",
+                stopwatch.ElapsedMilliseconds
+            );
         }
     }
 
@@ -87,7 +104,11 @@ public partial class PrimaryHub
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            logger.LogTrace("[SignalR] QueryWardrobe: {FriendCode} -> {Target}", FriendCode, request.TargetFriendCode);
+            logger.LogTrace(
+                "[SignalR] QueryWardrobe: {FriendCode} -> {Target}",
+                FriendCode,
+                request.TargetFriendCode
+            );
             if (
                 isValidPair<QueryPairWardrobeResponse>(FriendCode, request.TargetFriendCode) is
                 { } result
@@ -101,24 +122,34 @@ public partial class PrimaryHub
         {
             stopwatch.Stop();
             metricsService.IncrementSignalRMessage("QueryPairWardrobe", true);
-            metricsService.RecordSignalRMessageDuration("QueryPairWardrobe", stopwatch.ElapsedMilliseconds);
+            metricsService.RecordSignalRMessageDuration(
+                "QueryPairWardrobe",
+                stopwatch.ElapsedMilliseconds
+            );
         }
     }
 
     [HubMethodName(HubMethod.ApplyInteraction)]
-    public async Task<ActionResult<Unit>> ApplyInteraction(ApplyInteractionCommand command)
+    public async Task<ActionResult<Unit>> ApplyInteraction(ApplyInteractionRequest request)
     {
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            logger.LogInformation("[SignalR] ApplyInteraction: {FriendCode} -> {Target}, Action: {Action}",
-                FriendCode, command.TargetFriendCode, command.Action);
-            if (isValidPair<Unit>(FriendCode, command.TargetFriendCode) is { } pairResult)
+            logger.LogInformation(
+                "[SignalR] ApplyInteraction: {FriendCode} -> {Target}, Action: {Action}",
+                FriendCode,
+                request.TargetFriendCode,
+                request.Action
+            );
+            if (isValidPair<Unit>(FriendCode, request.TargetFriendCode) is { } pairResult)
             {
                 return pairResult;
             }
 
-            var interactionResult = await _pairInteractionsHandler.ApplyInteraction(FriendCode, command);
+            var interactionResult = await _pairInteractionsHandler.ApplyInteraction(
+                FriendCode,
+                request
+            );
             var result = interactionResult.Result;
             var targetFriendCode = interactionResult.TargetFriendCode;
             var action = interactionResult.Action;
@@ -127,11 +158,13 @@ public partial class PrimaryHub
             {
                 if (PairInteractionsHandler.IsLockModificationAction(action))
                 {
-                    await _notificationHandler.NotifyTargetOfStateChangeAsync(
+                    // TODO: Implement lock update
+                    await _notificationHandler.NotifyLockeeOfLockUpdateAsync(
                         targetFriendCode,
-                        friendCode => GetStateForTarget(friendCode),
+                        _locksHandler.GetAllLocksForUserAsync,
                         Clients
                     );
+
                     await _notificationHandler.PushStateToAllFriendsAsync(
                         targetFriendCode,
                         friendCode => permissionsService.GetAllPermissions(friendCode),
@@ -141,11 +174,6 @@ public partial class PrimaryHub
                 }
                 else if (action == KinkLinkCommon.Domain.Enums.Permissions.PairAction.ApplyWardrobe)
                 {
-                    await _notificationHandler.NotifyTargetOfStateChangeAsync(
-                        targetFriendCode,
-                        friendCode => GetStateForTarget(friendCode),
-                        Clients
-                    );
                     await _notificationHandler.PushStateToAllFriendsAsync(
                         targetFriendCode,
                         friendCode => permissionsService.GetAllPermissions(friendCode),
@@ -153,15 +181,22 @@ public partial class PrimaryHub
                         Clients
                     );
 
-                    var targetProfileId = await profilesService.GetProfileIdFromUidAsync(targetFriendCode);
-                    if (targetProfileId != null)
+                    if (presenceService.TryGet(targetFriendCode) is { } presence)
                     {
-                        var wardrobeState = await wardrobeDataService.GetWardrobeStateAsync(targetProfileId.Value);
-                        if (wardrobeState != null)
+                        var targetProfileId = await profilesService.GetProfileIdFromUidAsync(
+                            targetFriendCode
+                        );
+                        if (targetProfileId != null)
                         {
-                            await Clients
-                                .Client(Context.ConnectionId)
-                                .SendAsync(HubMethod.SyncWardrobeState, wardrobeState);
+                            var wardrobeState = await wardrobeDataService.GetWardrobeStateAsync(
+                                targetProfileId.Value
+                            );
+                            if (wardrobeState != null)
+                            {
+                                await Clients
+                                    .Client(presence.ConnectionId)
+                                    .SendAsync(HubMethod.SyncWardrobeState, wardrobeState);
+                            }
                         }
                     }
                 }
@@ -173,7 +208,10 @@ public partial class PrimaryHub
         {
             stopwatch.Stop();
             metricsService.IncrementSignalRMessage("ApplyInteraction", true);
-            metricsService.RecordSignalRMessageDuration("ApplyInteraction", stopwatch.ElapsedMilliseconds);
+            metricsService.RecordSignalRMessageDuration(
+                "ApplyInteraction",
+                stopwatch.ElapsedMilliseconds
+            );
         }
     }
 
@@ -184,9 +222,11 @@ public partial class PrimaryHub
             return null;
 
         var locks = await _locksHandler.GetAllLocksForUserAsync(targetFriendCode);
-        var wardrobeState = await wardrobeDataService.GetPairWardrobeItemsAsync(targetProfileId.Value);
+        var wardrobeState = await wardrobeDataService.GetPairWardrobeItemsAsync(
+            targetProfileId.Value
+        );
 
-        return new QueryPairStateResponse(
+        return new SyncPairStateCommand(
             targetFriendCode,
             new UserPermissions(),
             wardrobeState,
@@ -194,10 +234,7 @@ public partial class PrimaryHub
         );
     }
 
-    private async Task<object?> GetStateForPush(
-        string friendCode,
-        TwoWayPermissions perm
-    )
+    private async Task<object?> GetStateForPush(string friendCode, TwoWayPermissions perm)
     {
         var friendProfileId = await profilesService.GetProfileIdFromUidAsync(friendCode);
         if (friendProfileId == null)
@@ -207,6 +244,11 @@ public partial class PrimaryHub
         var wardrobe = await wardrobeDataService.GetPairWardrobeItemsAsync(friendProfileId.Value);
         var wardrobeWithLocks = PairWardrobeStateDto.PopulateLockIds(wardrobe, locks, logger);
 
-        return new QueryPairStateResponse(friendCode, perm.PermissionsGrantedTo, wardrobeWithLocks, locks);
+        return new SyncPairStateCommand(
+            friendCode,
+            perm.PermissionsGrantedTo,
+            wardrobeWithLocks,
+            locks
+        );
     }
 }

@@ -21,7 +21,7 @@ public class RemoveFriendHandler(
     /// <summary>
     ///     Handles the request
     /// </summary>
-    public async Task<RemovePair> Handle(
+    public async Task<RemoveFriendResponse> Handle(
         string senderFriendCode,
         RemoveFriendRequest request,
         IHubCallerClients clients
@@ -41,18 +41,18 @@ public class RemoveFriendHandler(
 
         // If the request wasn't meaningful
         if (result is not RemovePairEc.Success)
-            return new RemovePair(result);
+            return new RemoveFriendResponse(result);
 
         // If the target isn't online
         if (presenceService.TryGet(request.TargetFriendCode) is not { } friend)
-            return new RemovePair(result);
+            return new RemoveFriendResponse(result);
 
         // If the target is online, but they don't have us added
         if (
             await permissionsService.GetPermissions(request.TargetFriendCode, senderFriendCode)
             is null
         )
-            return new RemovePair(result);
+            return new RemoveFriendResponse(result);
 
         try
         {
@@ -76,6 +76,6 @@ public class RemoveFriendHandler(
         }
 
         // Return always
-        return new RemovePair(result);
+        return new RemoveFriendResponse(result);
     }
 }

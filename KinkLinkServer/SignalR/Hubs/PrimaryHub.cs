@@ -199,7 +199,7 @@ public partial class PrimaryHub(
                         .Client(presence.ConnectionId)
                         .SendAsync(
                             HubMethod.SyncPairState,
-                            new QueryPairStateResponse(
+                            new SyncPairStateCommand(
                                 FriendCode,
                                 perm.PermissionsGrantedTo,
                                 wardrobeWithLocks,

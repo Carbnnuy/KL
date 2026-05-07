@@ -21,13 +21,13 @@ public class ChatMessageReceivedHandler : AbstractNetworkHandler, IDisposable
     public ChatMessageReceivedHandler(ChatViewUiController controller, LogService log, FriendsListService friendsList, NetworkService network, PauseService pause) : base(friendsList, log, pause)
     {
         _controller = controller;
-        _handler = network.Connection.On<ChatReceivedMessage>(HubMethod.ReceiveChatMessage, Handle);
+        _handler = network.Connection.On<ChatMessageCommand>(HubMethod.ReceiveChatMessage, Handle);
     }
 
     /// <summary>
     ///     Handles incoming global chat messages
     /// </summary>
-    private void Handle(ChatReceivedMessage command)
+    private void Handle(ChatMessageCommand command)
     {
         Plugin.Log.Verbose($"Chat message from {command.Alias} ({command.Timestamp}): {command.Message}");
 

@@ -170,7 +170,7 @@ public class PairsViewUiController : IDisposable
                 return;
 
             var request = new RemoveFriendRequest(FriendCode);
-            var response = await _networkService.InvokeAsync<RemovePair>(
+            var response = await _networkService.InvokeAsync<RemoveFriendResponse>(
                 HubMethod.RemoveFriend,
                 request
             );

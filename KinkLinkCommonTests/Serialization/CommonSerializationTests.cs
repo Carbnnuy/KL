@@ -427,7 +427,7 @@ public class CommonSerializationTests
 
     public class NetworkCommandsTests
     {
-        // Note: SpeakCommand, EmoteCommand, and ApplyInteractionCommand have [MessagePackObject] without
+        // Note: SpeakCommand, EmoteCommand, and ApplyInteractionRequest have [MessagePackObject] without
         // keyAsPropertyName: true and without explicit Key attributes - they cannot be serialized properly
         // with ContractlessStandardResolver. These types appear to have a serialization bug.
     }
@@ -472,7 +472,7 @@ public class CommonSerializationTests
             Assert.Empty(deserialized.LockStates);
         }
 
-        // Note: ApplyInteractionCommand has [MessagePackObject] without keyAsPropertyName: true and without
+        // Note: ApplyInteractionRequest has [MessagePackObject] without keyAsPropertyName: true and without
         // explicit Key attributes - cannot be serialized properly with ContractlessStandardResolver.
 
         [Fact]

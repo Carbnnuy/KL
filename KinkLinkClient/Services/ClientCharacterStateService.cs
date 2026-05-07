@@ -7,6 +7,7 @@ using KinkLinkCommon.Domain.Enums;
 using KinkLinkCommon.Domain.Enums.Permissions;
 using KinkLinkCommon.Domain.Network;
 using KinkLinkCommon.Domain.Network.PairInteractions;
+using KinkLinkCommon.Domain.Network.SyncPairState;
 using KinkLinkCommon.Domain.Wardrobe;
 
 namespace KinkLinkClient.Services;
@@ -20,9 +21,9 @@ public class ClientCharacterStateService : IDisposable
         _network = network;
     }
 
-    public void UpdateLocalState(QueryPairStateResponse state) { }
+    public void UpdateLocalState(SyncPairStateCommand state) { }
 
-    public QueryPairStateResponse? GetLocalState() => null;
+    public SyncPairStateCommand? GetLocalState() => null;
 
     public async Task<ActionResult<QueryPairStateResponse>> QueryPairStateAsync(
         string targetFriendCode
@@ -54,9 +55,9 @@ public class ClientCharacterStateService : IDisposable
     {
         try
         {
-            var command = new ApplyInteractionCommand(targetFriendCode, action, payload);
+            var request = new ApplyInteractionRequest(targetFriendCode, action, payload);
             var response = await _network
-                .InvokeAsync<ActionResult<Unit>>(HubMethod.ApplyInteraction, command)
+                .InvokeAsync<ActionResult<Unit>>(HubMethod.ApplyInteraction, request)
                 .ConfigureAwait(false);
 
             return response;

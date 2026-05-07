@@ -37,7 +37,7 @@ public class ChatHandler(ILogger<ChatHandler> logger)
 
         // Get user alias
         var user_alias = GetAlias(profileUID, request.Title);
-        var dto = new ChatReceivedMessage(user_alias, request.Message, DateTime.UtcNow);
+        var dto = new ChatMessageCommand(user_alias, request.Message, DateTime.UtcNow);
 
         // Broadcast to all authenticated users
         await clients.All.SendAsync(HubMethod.ReceiveChatMessage, dto);

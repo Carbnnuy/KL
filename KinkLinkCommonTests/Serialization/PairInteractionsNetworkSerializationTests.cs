@@ -10,33 +10,33 @@ public class PairInteractionsNetworkSerializationTests
         MessagePackSerializerOptions.Standard
             .WithSecurity(MessagePackSecurity.UntrustedData);
 
-    #region ApplyInteractionCommand Tests
+    #region ApplyInteractionRequest Tests
 
     [Fact]
-    public void ApplyInteractionCommand_Serialize_WithAllFields_Succeeds()
+    public void ApplyInteractionRequest_Serialize_WithAllFields_Succeeds()
     {
-        var command = new ApplyInteractionCommand(
+        var request = new ApplyInteractionRequest(
             "TESTCODE",
             PairAction.ApplyWardrobe,
             null
         );
 
-        var data = MessagePackSerializer.Serialize(command, MessagePackOptions);
+        var data = MessagePackSerializer.Serialize(request, MessagePackOptions);
 
         Assert.NotEmpty(data);
     }
 
     [Fact]
-    public void ApplyInteractionCommand_RoundTrip_PreservesAllFields()
+    public void ApplyInteractionRequest_RoundTrip_PreservesAllFields()
     {
-        var command = new ApplyInteractionCommand(
+        var request = new ApplyInteractionRequest(
             "VLHIMNDEER",
             PairAction.ApplyWardrobe,
             null
         );
 
-        var data = MessagePackSerializer.Serialize(command, MessagePackOptions);
-        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionCommand>(data, MessagePackOptions);
+        var data = MessagePackSerializer.Serialize(request, MessagePackOptions);
+        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionRequest>(data, MessagePackOptions);
 
         Assert.NotNull(deserialized);
         Assert.Equal("VLHIMNDEER", deserialized.TargetFriendCode);
@@ -45,51 +45,35 @@ public class PairInteractionsNetworkSerializationTests
     }
 
     [Fact]
-    public void ApplyInteractionCommand_Serialize_ApplyGag_Succeeds()
+    public void ApplyInteractionRequest_Serialize_ApplyGag_Succeeds()
     {
-        var command = new ApplyInteractionCommand(
+        var request = new ApplyInteractionRequest(
             "FRIEND1",
             PairAction.ApplyGag,
             null
         );
 
-        var data = MessagePackSerializer.Serialize(command, MessagePackOptions);
-        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionCommand>(data, MessagePackOptions);
+        var data = MessagePackSerializer.Serialize(request, MessagePackOptions);
+        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionRequest>(data, MessagePackOptions);
 
         Assert.NotNull(deserialized);
         Assert.Equal(PairAction.ApplyGag, deserialized.Action);
     }
 
     [Fact]
-    public void ApplyInteractionCommand_Serialize_LockGag_Succeeds()
+    public void ApplyInteractionRequest_Serialize_LockGag_Succeeds()
     {
-        var command = new ApplyInteractionCommand(
+        var request = new ApplyInteractionRequest(
             "FRIEND2",
             PairAction.LockGag,
             null
         );
 
-        var data = MessagePackSerializer.Serialize(command, MessagePackOptions);
-        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionCommand>(data, MessagePackOptions);
+        var data = MessagePackSerializer.Serialize(request, MessagePackOptions);
+        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionRequest>(data, MessagePackOptions);
 
         Assert.NotNull(deserialized);
         Assert.Equal(PairAction.LockGag, deserialized.Action);
-    }
-
-    [Fact]
-    public void ApplyInteractionCommand_Serialize_ApplyOwnMoodle_Succeeds()
-    {
-        var command = new ApplyInteractionCommand(
-            "FRIEND3",
-            PairAction.ApplyOwnMoodle,
-            null
-        );
-
-        var data = MessagePackSerializer.Serialize(command, MessagePackOptions);
-        var deserialized = MessagePackSerializer.Deserialize<ApplyInteractionCommand>(data, MessagePackOptions);
-
-        Assert.NotNull(deserialized);
-        Assert.Equal(PairAction.ApplyOwnMoodle, deserialized.Action);
     }
 
     #endregion

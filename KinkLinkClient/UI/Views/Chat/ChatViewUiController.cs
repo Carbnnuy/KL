@@ -22,7 +22,7 @@ public class ChatViewUiController(
     private readonly ProfileService _profile = profile;
 
     private const uint MAX_CHAT_HISTORY = 100;
-    private List<ChatReceivedMessage> _messages = new();
+    private List<ChatMessageCommand> _messages = new();
 
     private bool _busy = false;
 
@@ -68,12 +68,12 @@ public class ChatViewUiController(
         }
     }
 
-    public IEnumerable<ChatReceivedMessage> Messages()
+    public IEnumerable<ChatMessageCommand> Messages()
     {
         return _messages;
     }
 
-    public void AddMessage(ChatReceivedMessage message)
+    public void AddMessage(ChatMessageCommand message)
     {
         // TODO: If this proves too costly, migrate to a circular buffer
         // To keep the chat reasonably optimized, start removing messages if it is too long.

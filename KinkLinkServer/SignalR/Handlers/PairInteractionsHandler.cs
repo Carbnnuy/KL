@@ -120,20 +120,20 @@ public class PairInteractionsHandler(
         ActionResult<Unit> Result,
         string TargetFriendCode,
         PairAction Action
-    )> ApplyInteraction(string senderFriendCode, ApplyInteractionCommand command)
+    )> ApplyInteraction(string senderFriendCode, ApplyInteractionRequest request)
     {
         logger.LogInformation(
             "[PairInteractionsHandler] ApplyInteraction: Sender={Sender}, Target={Target}, Action={Action}",
             senderFriendCode,
-            command.TargetFriendCode,
-            command.Action
+            request.TargetFriendCode,
+            request.Action
         );
 
-        if (command.Action == PairAction.ApplyWardrobe && command.Payload?.WardrobeItems != null)
+        if (request.Action == PairAction.ApplyWardrobe && request.Payload?.WardrobeItems != null)
         {
             logger.LogInformation(
                 "[PairInteractionsHandler] ApplyWardrobe: {Count} items in payload",
-                command.Payload.WardrobeItems.Count
+                request.Payload.WardrobeItems.Count
             );
         }
 
@@ -146,25 +146,25 @@ public class PairInteractionsHandler(
             return (
                 ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetOffline),
                 string.Empty,
-                command.Action
+                request.Action
             );
         }
 
         var permissions = await permissionsService.GetPermissions(
             senderFriendCode,
-            command.TargetFriendCode
+            request.TargetFriendCode
         );
         if (permissions == null)
         {
             logger.LogWarning(
                 "[PairInteractionsHandler] No permissions between {Sender} and {Target}",
                 senderFriendCode,
-                command.TargetFriendCode
+                request.TargetFriendCode
             );
             return (
                 ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetNotFriends),
                 string.Empty,
-                command.Action
+                request.Action
             );
         }
 
@@ -173,63 +173,63 @@ public class PairInteractionsHandler(
         {
             logger.LogWarning(
                 "[PairInteractionsHandler] Target {Target} has not granted permissions to {Sender}",
-                command.TargetFriendCode,
+                request.TargetFriendCode,
                 senderFriendCode
             );
             return (
                 ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetHasNotGrantedSenderPermissions),
                 string.Empty,
-                command.Action
+                request.Action
             );
         }
 
         logger.LogInformation(
             "[PairInteractionsHandler] Permissions check: GrantedBy={Perms}, Required={Required}",
             grantedBy.Perms,
-            command.Action.ToInteractionPerm()
+            request.Action.ToInteractionPerm()
         );
 
-        if (!grantedBy.Perms.HasFlag(command.Action.ToInteractionPerm()))
+        if (!grantedBy.Perms.HasFlag(request.Action.ToInteractionPerm()))
         {
             logger.LogWarning(
                 "[PairInteractionsHandler] Action {Action} not permitted for {Sender}. Has={HasPerms}",
-                command.Action,
+                request.Action,
                 senderFriendCode,
                 grantedBy.Perms
             );
             return (
                 ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetHasNotGrantedSenderPermissions),
                 string.Empty,
-                command.Action
+                request.Action
             );
         }
 
-        var targetFriendCode = command.TargetFriendCode;
+        var targetFriendCode = request.TargetFriendCode;
         var context = new InteractionContext(senderFriendCode, targetFriendCode, permissions);
 
         ActionResult<Unit> result;
 
-        if (command.Action == PairAction.UnlockWardrobe)
+        if (request.Action == PairAction.UnlockWardrobe)
         {
-            result = await HandleUnlockAsync(context, command.Payload);
+            result = await HandleUnlockAsync(context, request.Payload);
         }
         else
         {
-            var handler = handlerFactory.GetHandler(command.Action);
+            var handler = handlerFactory.GetHandler(request.Action);
             if (handler == null)
             {
                 logger.LogWarning(
                     "[PairInteractionsHandler] No handler found for action {Action}",
-                    command.Action
+                    request.Action
                 );
                 return (
                     ActionResultBuilder.Fail<Unit>(ActionResultEc.Unknown),
                     string.Empty,
-                    command.Action
+                    request.Action
                 );
             }
 
-            result = await handler.HandleAsync(context, command.Payload);
+            result = await handler.HandleAsync(context, request.Payload);
 
             if (result.Result != ActionResultEc.Success)
             {
@@ -237,13 +237,13 @@ public class PairInteractionsHandler(
                     "[PairInteractionsHandler] Handler returned error {Error}",
                     result.Result
                 );
-                return (result, string.Empty, command.Action);
+                return (result, string.Empty, request.Action);
             }
 
             logger.LogInformation("[PairInteractionsHandler] Handler completed successfully");
         }
 
-        return (ActionResultBuilder.Ok(Unit.Empty), targetFriendCode, command.Action);
+        return (ActionResultBuilder.Ok(Unit.Empty), targetFriendCode, request.Action);
     }
 
     private async Task<ActionResult<Unit>> HandleUnlockAsync(

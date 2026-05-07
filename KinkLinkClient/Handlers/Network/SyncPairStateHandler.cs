@@ -8,6 +8,7 @@ using KinkLinkCommon.Dependencies.Glamourer;
 using KinkLinkCommon.Domain.Network;
 using KinkLinkCommon.Domain.Network.PairInteractions;
 using KinkLinkCommon.Domain.Network.SyncPairState;
+using KinkLinkCommon.Domain;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace KinkLinkClient.Handlers.Network;
@@ -20,10 +21,10 @@ public class SyncPairStateHandler : IDisposable
     public SyncPairStateHandler(FriendsListService friendsList, NetworkService network)
     {
         _friendsList = friendsList;
-        _handler = network.Connection.On<QueryPairStateResponse>(HubMethod.SyncPairState, Handle);
+        _handler = network.Connection.On<SyncPairStateCommand>(HubMethod.SyncPairState, Handle);
     }
 
-    private void Handle(QueryPairStateResponse response)
+    private void Handle(SyncPairStateCommand response)
     {
         try
         {
@@ -37,7 +38,13 @@ public class SyncPairStateHandler : IDisposable
                 return;
             }
 
-            var updatedState = InteractionContext.FromPairState(response);
+            var pairState = new QueryPairStateResponse(
+                response.TargetFriendCode,
+                response.GrantedTo,
+                response.WardrobeState,
+                response.LockStates
+            );
+            var updatedState = InteractionContext.FromPairState(pairState);
             _friendsList.UpdateFriendState(updatedState);
 
             NotificationHelper.Info(
