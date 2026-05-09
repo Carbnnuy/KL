@@ -23,6 +23,7 @@ public class LoginViewUiController : IDisposable
     // Injected
     private readonly NetworkService _networkService;
     private readonly LoginManager _loginManager;
+    private readonly IdentityService _identityService;
 
     /// <summary>
     ///     User inputted secret
@@ -39,10 +40,16 @@ public class LoginViewUiController : IDisposable
         && !string.IsNullOrEmpty(SelectedProfileUID);
     public bool IsQuerying { get; private set; }
 
-    public LoginViewUiController(NetworkService networkService, LoginManager loginManager)
+    public LoginViewUiController(
+        NetworkService networkService,
+        LoginManager loginManager,
+        IdentityService identityService
+    )
     {
         _networkService = networkService;
         _loginManager = loginManager;
+        _identityService = identityService;
+
         _loginManager.LoginFinished += OnLoginFinished;
         if (Plugin.Configuration is not null)
         {
@@ -55,7 +62,7 @@ public class LoginViewUiController : IDisposable
             Plugin.Configuration.ServerBaseUrl = ServerOptions.Urls[ServerIndex];
         }
         if (Plugin.CharacterConfiguration is not null)
-            SelectedProfileUID = Plugin.CharacterConfiguration.ProfileUID;
+            SelectedProfileUID = _identityService.FriendCode;
     }
 
     public async void GetProfileUids()
@@ -68,27 +75,20 @@ public class LoginViewUiController : IDisposable
         IsQuerying = true;
         EditSecret = false;
         this.AvailableProfileUids = new List<(string, string)> { ("None Selected", "") };
+        // New secret key has been input, so we should save it.
         Plugin.Configuration.SecretKey = this.Secret;
+        // We have not yet selected an identity so we should clear the current friendcode
+        _identityService.ClearFriendCode();
         var result = await _networkService.GetProfilesAsync(Secret);
         await Plugin.Configuration.Save().ConfigureAwait(false);
         IsQuerying = false;
 
         this.AvailableProfileUids = this.AvailableProfileUids.Concat(result).ToList();
         // We need to prune out any unselected numbers
-        if (Plugin.CharacterConfiguration is { } config)
-        {
-            var index = this.AvailableProfileUids.FindIndex(Profile =>
-                Profile.Item1 == config.ProfileUID
-            );
-            if (index >= 0)
-            {
-                SelectedProfileUID = this.AvailableProfileUids[index].Item1;
-            }
-        }
-        else
-        {
-            SelectedProfileUID = "";
-        }
+        var index = this.AvailableProfileUids.FindIndex(Profile =>
+            Profile.Item1 == _identityService.FriendCode
+        );
+        SelectedProfileUID = index > 0 ? this.AvailableProfileUids[index].Item1 : "";
     }
 
     public async void SelectServer(int selectedIndex)
@@ -122,9 +122,9 @@ public class LoginViewUiController : IDisposable
 
             // Set the character config in the identity service
 
-            // Save the configuration
             await Plugin.Configuration.Save().ConfigureAwait(false);
-            await Plugin.CharacterConfiguration.Save().ConfigureAwait(false);
+            this._identityService.SetFriendCode(this.SelectedProfileUID);
+
             // Try to connect to the server
             await _networkService.StartAsync();
         }
@@ -146,7 +146,7 @@ public class LoginViewUiController : IDisposable
         if (Plugin.CharacterConfiguration is null)
             return;
 
-        SelectedProfileUID = Plugin.CharacterConfiguration.ProfileUID;
+        SelectedProfileUID = _identityService.FriendCode;
     }
 
     public void Dispose()

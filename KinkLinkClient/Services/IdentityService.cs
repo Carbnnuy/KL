@@ -15,6 +15,12 @@ public class IdentityService
 
     public event EventHandler<String>? IdentityUpdated;
 
+    public IdentityService()
+    {
+        FriendCode =
+            Plugin.CharacterConfiguration != null ? Plugin.CharacterConfiguration.ProfileUID : "";
+    }
+
     /// <summary>
     ///     The current alteration to the local character
     /// </summary>
@@ -32,7 +38,7 @@ public class IdentityService
     {
         this.FriendCode = code;
         IdentityUpdated?.Invoke(this, this.FriendCode);
-        Plugin.CharacterConfiguration.ProfileUID = this.FriendCode;
+        Plugin.CharacterConfiguration?.ProfileUID = this.FriendCode;
         Plugin.CharacterConfiguration?.Save().ConfigureAwait(false);
     }
 
@@ -40,6 +46,7 @@ public class IdentityService
     {
         FriendCode = string.Empty;
         IdentityUpdated?.Invoke(this, this.FriendCode);
+        Plugin.CharacterConfiguration?.Save().ConfigureAwait(false);
     }
 
     /// <summary>
