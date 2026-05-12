@@ -120,7 +120,7 @@ public partial class PrimaryHub
     }
 
     [HubMethodName(HubMethod.ListWardrobeItems)]
-    public async Task<ActionResult<ListWardrobeItemsResponse>> ListWardrobeItems(ListWardrobeItemsRequest request)
+    public async Task<ActionResult<ListWardrobeItemsResponse>> ListWardrobeItems()
     {
         var stopwatch = Stopwatch.StartNew();
         var friendCode = FriendCode;
@@ -200,7 +200,7 @@ public partial class PrimaryHub
     }
 
     [HubMethodName(HubMethod.GetWardrobeStatus)]
-    public async Task<ActionResult<GetWardrobeStatusResponse>> GetWardrobeStatus(GetWardrobeStatusRequest request)
+    public async Task<ActionResult<GetWardrobeStatusResponse>> GetWardrobeStatus()
     {
         var stopwatch = Stopwatch.StartNew();
         var friendCode = FriendCode;
