@@ -21,7 +21,7 @@ public class PairInteractionsHandler : IDisposable
 {
     private readonly LogService _log;
     private readonly NetworkService _network;
-    private readonly WardrobeService _wardrobeService;
+    private readonly WardrobeManager _wardrobeManager;
     private readonly IDisposable _applyInteractionHandler;
 
     public event Action<ApplyInteractionRequest, ActionResult<Unit>>? OnInteractionReceived;
@@ -29,12 +29,12 @@ public class PairInteractionsHandler : IDisposable
     public PairInteractionsHandler(
         LogService log,
         NetworkService network,
-        WardrobeService wardrobeService
+        WardrobeManager wardrobeManager
     )
     {
         _log = log;
         _network = network;
-        _wardrobeService = wardrobeService;
+        _wardrobeManager = wardrobeManager;
 
         _applyInteractionHandler = network.Connection.On<
             ApplyInteractionRequest,
@@ -52,14 +52,22 @@ public class PairInteractionsHandler : IDisposable
             if (request.Payload == null)
             {
                 Plugin.Log.Warning("[PairInteractions] ApplyWardrobe but payload is null");
+                OnInteractionReceived?.Invoke(request, ActionResultBuilder.Fail<Unit>(ActionResultEc.ClientBadData));
+                return ActionResultBuilder.Fail<Unit>(ActionResultEc.ClientBadData);
             }
-            else if (request.Payload.WardrobeItems == null)
+
+            if (request.Payload.WardrobeItems == null)
             {
                 Plugin.Log.Warning("[PairInteractions] ApplyWardrobe but WardrobeItems is null");
+                OnInteractionReceived?.Invoke(request, ActionResultBuilder.Fail<Unit>(ActionResultEc.ClientBadData));
+                return ActionResultBuilder.Fail<Unit>(ActionResultEc.ClientBadData);
             }
-            else
+
+            var success = await HandleApplyWardrobeAsync(request.Payload.WardrobeItems);
+            if (!success)
             {
-                await HandleApplyWardrobeAsync(request.Payload.WardrobeItems);
+                OnInteractionReceived?.Invoke(request, ActionResultBuilder.Fail<Unit>(ActionResultEc.Unknown));
+                return ActionResultBuilder.Fail<Unit>(ActionResultEc.Unknown);
             }
         }
 
@@ -67,7 +75,7 @@ public class PairInteractionsHandler : IDisposable
         return ActionResultBuilder.Ok(Unit.Empty);
     }
 
-    private async Task HandleApplyWardrobeAsync(List<WardrobeDto> items)
+    private async Task<bool> HandleApplyWardrobeAsync(List<WardrobeDto> items)
     {
         try
         {
@@ -78,15 +86,15 @@ public class PairInteractionsHandler : IDisposable
                     switch (item.Type)
                     {
                         case "set":
-                            await _wardrobeService.RemoveActiveSetAsync();
+                            await _wardrobeManager.RemoveActiveSetAsync();
                             _log.Custom("Removed wardrobe set from pair");
                             break;
                         case "item":
-                            await _wardrobeService.RemovePieceFromSlotAsync(item.Slot);
+                            await _wardrobeManager.RemovePieceFromSlotAsync(item.Slot);
                             _log.Custom($"Removed wardrobe item from slot {item.Slot} from pair");
                             break;
                         case "moditem":
-                            await _wardrobeService.RemoveWardrobeItemFromActive(item.Id);
+                            await _wardrobeManager.RemoveWardrobeItemFromActive(item.Id);
                             _log.Custom($"Removed moditem {item.Name} from pair");
                             break;
                     }
@@ -99,7 +107,7 @@ public class PairInteractionsHandler : IDisposable
                         var design = GlamourerDesignHelper.FromBase64(item.DataBase64);
                         if (design != null)
                         {
-                            await _wardrobeService.ApplyDesignFromPairAsync(design, item.Priority);
+                            await _wardrobeManager.ApplyDesignFromPairAsync(design, item.Priority);
                         }
                         break;
 
@@ -107,14 +115,17 @@ public class PairInteractionsHandler : IDisposable
                         var wardrobeItem = GlamourerDesignHelper.FromItemBase64(item.DataBase64);
                         if (wardrobeItem != null && wardrobeItem.Item != null)
                         {
-                            wardrobeItem.Id = item.Id;
-                            wardrobeItem.Name = item.Name;
-                            wardrobeItem.Description = item.Description;
-                            wardrobeItem.Slot = item.Slot;
-                            wardrobeItem.Priority = item.Priority;
+                            wardrobeItem = wardrobeItem with
+                            {
+                                Id = item.Id,
+                                Name = item.Name,
+                                Description = item.Description,
+                                Slot = item.Slot,
+                                Priority = item.Priority,
+                            };
                             wardrobeItem.Item.Apply = true;
                             wardrobeItem.Item.ApplyStain = true;
-                            await _wardrobeService.ApplyPieceAsync(wardrobeItem);
+                            await _wardrobeManager.ApplyPieceAsync(wardrobeItem);
                         }
                         break;
 
@@ -122,12 +133,15 @@ public class PairInteractionsHandler : IDisposable
                         var modItem = GlamourerDesignHelper.FromItemBase64(item.DataBase64);
                         if (modItem != null)
                         {
-                            modItem.Id = item.Id;
-                            modItem.Name = item.Name;
-                            modItem.Description = item.Description;
-                            modItem.Slot = item.Slot;
-                            modItem.Priority = item.Priority;
-                            await _wardrobeService.ApplyWardrobeItem(modItem);
+                            modItem = modItem with
+                            {
+                                Id = item.Id,
+                                Name = item.Name,
+                                Description = item.Description,
+                                Slot = item.Slot,
+                                Priority = item.Priority,
+                            };
+                            await _wardrobeManager.ApplyWardrobeItem(modItem);
                         }
                         break;
 
@@ -138,10 +152,12 @@ public class PairInteractionsHandler : IDisposable
             }
 
             _log.Custom($"Applied {items.Count} wardrobe items from pair");
+            return true;
         }
         catch (Exception ex)
         {
             Plugin.Log.Error(ex, "Failed to apply wardrobe from pair interaction");
+            return false;
         }
     }
 

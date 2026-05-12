@@ -49,171 +49,222 @@ public class WardrobeApplyInteractionHandler(
             return ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetNotFriends);
         }
 
-        var currentState = await wardrobeDataService.GetWardrobeStateAsync(targetProfileId.Value);
-        var equipment = currentState?.Equipment ?? new Dictionary<string, WardrobeItemData>();
-        var modSettings = currentState?.ModSettings ?? new Dictionary<string, WardrobeItemData>();
-        string? baseLayerBase64 = currentState?.BaseLayerBase64;
+        return await HandleApplyAsync(context, payload, targetProfileId.Value);
+    }
 
-        var allWardrobeItems = await wardrobeDataService.GetAllWardrobeItemsAsync(targetProfileId.Value);
+    private async Task<ActionResult<Unit>> HandleApplyAsync(
+        InteractionContext context,
+        InteractionPayload payload,
+        int targetProfileId
+    )
+    {
+        var allWardrobeItems = await wardrobeDataService.GetAllWardrobeItemsAsync(targetProfileId);
         var setItems = allWardrobeItems.Where(i => i.Type == "set").ToDictionary(i => i.Id);
         var itemItems = allWardrobeItems.Where(i => i.Type == "item").ToDictionary(i => i.Id);
         var modItems = allWardrobeItems.Where(i => i.Type == "moditem").ToDictionary(i => i.Id);
 
-        foreach (var item in payload.WardrobeItems)
-        {
-            if (item.DataBase64 == null)
+        return await wardrobeDataService.WithWardrobeTransactionAsync(
+            targetProfileId,
+            async sql =>
             {
-                switch (item.Type)
+                var currentState = await wardrobeDataService.GetWardrobeStateAsync(
+                    targetProfileId,
+                    sql
+                );
+                var equipment = currentState?.Equipment ?? new Dictionary<string, WardrobeItemData>();
+                var modSettings = currentState?.ModSettings ?? new Dictionary<string, WardrobeItemData>();
+                string? baseLayerBase64 = currentState?.BaseLayerBase64;
+
+                foreach (var item in payload.WardrobeItems)
                 {
-                    case "set":
-                        var canRemoveSet = await _locksHandler.CheckCanModifySlotAsync(
-                            context.SenderFriendCode,
-                            context.TargetFriendCode,
-                            "wardrobe-baseset"
-                        );
-                        if (canRemoveSet.Result != ActionResultEc.Success)
+                    if (item.DataBase64 == null)
+                    {
+                        switch (item.Type)
                         {
-                            _logger.LogWarning(
-                                "[WardrobeApplyInteractionHandler] Sender {Sender} cannot modify baseset lock for {Target}",
-                                context.SenderFriendCode,
-                                context.TargetFriendCode
-                            );
-                            return ActionResultBuilder.Fail<Unit>(canRemoveSet.Result);
+                            case "set":
+                                var canRemoveSet = await _locksHandler.CheckCanModifySlotAsync(
+                                    context.SenderFriendCode,
+                                    context.TargetFriendCode,
+                                    "wardrobe-baseset"
+                                );
+                                if (canRemoveSet.Result != ActionResultEc.Success)
+                                {
+                                    _logger.LogWarning(
+                                        "[WardrobeApplyInteractionHandler] Sender {Sender} cannot modify baseset lock for {Target}",
+                                        context.SenderFriendCode,
+                                        context.TargetFriendCode
+                                    );
+                                    return ActionResultBuilder.Fail<Unit>(canRemoveSet.Result);
+                                }
+                                baseLayerBase64 = null;
+                                break;
+                            case "item":
+                                var slotKey = item.Slot.ToString();
+                                var lockId = $"wardrobe-{slotKey.ToLowerInvariant()}";
+                                var canRemoveItem = await _locksHandler.CheckCanModifySlotAsync(
+                                    context.SenderFriendCode,
+                                    context.TargetFriendCode,
+                                    lockId
+                                );
+                                if (canRemoveItem.Result != ActionResultEc.Success)
+                                {
+                                    _logger.LogWarning(
+                                        "[WardrobeApplyInteractionHandler] Sender {Sender} cannot modify lock {LockId} for {Target}",
+                                        context.SenderFriendCode,
+                                        lockId,
+                                        context.TargetFriendCode
+                                    );
+                                    return ActionResultBuilder.Fail<Unit>(canRemoveItem.Result);
+                                }
+                                equipment.Remove(slotKey);
+                                break;
+                            case "moditem":
+                                var modRemoveLockId = $"wardrobe-{item.Slot.ToString().ToLowerInvariant()}";
+                                var canRemoveMod = await _locksHandler.CheckCanModifySlotAsync(
+                                    context.SenderFriendCode,
+                                    context.TargetFriendCode,
+                                    modRemoveLockId
+                                );
+                                if (canRemoveMod.Result != ActionResultEc.Success)
+                                {
+                                    _logger.LogWarning(
+                                        "[WardrobeApplyInteractionHandler] Sender {Sender} cannot remove moditem on slot {Slot} for {Target}",
+                                        context.SenderFriendCode,
+                                        item.Slot,
+                                        context.TargetFriendCode
+                                    );
+                                    return ActionResultBuilder.Fail<Unit>(canRemoveMod.Result);
+                                }
+                                modSettings.Remove(item.Id.ToString());
+                                break;
                         }
-                        baseLayerBase64 = null;
-                        break;
-                    case "item":
-                        var slotKey = item.Slot.ToString();
-                        var lockId = $"wardrobe-{slotKey.ToLowerInvariant()}";
-                        var canRemoveItem = await _locksHandler.CheckCanModifySlotAsync(
-                            context.SenderFriendCode,
-                            context.TargetFriendCode,
-                            lockId
-                        );
-                        if (canRemoveItem.Result != ActionResultEc.Success)
-                        {
-                            _logger.LogWarning(
-                                "[WardrobeApplyInteractionHandler] Sender {Sender} cannot modify lock {LockId} for {Target}",
+                        continue;
+                    }
+
+                    switch (item.Type)
+                    {
+                        case "set":
+                            var canApplySet = await _locksHandler.CheckCanModifySlotAsync(
                                 context.SenderFriendCode,
-                                lockId,
-                                context.TargetFriendCode
+                                context.TargetFriendCode,
+                                "wardrobe-baseset"
                             );
-                            return ActionResultBuilder.Fail<Unit>(canRemoveItem.Result);
-                        }
-                        equipment.Remove(slotKey);
-                        break;
-                    case "moditem":
-                        modSettings.Remove(item.Name);
-                        break;
+                            if (canApplySet.Result != ActionResultEc.Success)
+                            {
+                                _logger.LogWarning(
+                                    "[WardrobeApplyInteractionHandler] Sender {Sender} cannot apply set to {Target}",
+                                    context.SenderFriendCode,
+                                    context.TargetFriendCode
+                                );
+                                return ActionResultBuilder.Fail<Unit>(canApplySet.Result);
+                            }
+                            if (setItems.TryGetValue(item.Id, out var setItem) && setItem.DataBase64 != null)
+                            {
+                                baseLayerBase64 = setItem.DataBase64;
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "[WardrobeApplyInteractionHandler] Set item not found or has no data for ID {Id}",
+                                    item.Id
+                                );
+                                return ActionResultBuilder.Fail<Unit>(ActionResultEc.ValueNotSet);
+                            }
+                            break;
+
+                        case "item":
+                            var itemLockId = $"wardrobe-{item.Slot.ToString().ToLowerInvariant()}";
+                            var canApplyItem = await _locksHandler.CheckCanModifySlotAsync(
+                                context.SenderFriendCode,
+                                context.TargetFriendCode,
+                                itemLockId
+                            );
+                            if (canApplyItem.Result != ActionResultEc.Success)
+                            {
+                                _logger.LogWarning(
+                                    "[WardrobeApplyInteractionHandler] Sender {Sender} cannot apply item to slot {Slot} for {Target}",
+                                    context.SenderFriendCode,
+                                    item.Slot,
+                                    context.TargetFriendCode
+                                );
+                                return ActionResultBuilder.Fail<Unit>(canApplyItem.Result);
+                            }
+                            if (itemItems.TryGetValue(item.Id, out var wardrobeItemData) && wardrobeItemData.DataBase64 != null)
+                            {
+                                var wardrobeItem = DeserializeWardrobeItem(wardrobeItemData);
+                                if (wardrobeItem != null)
+                                {
+                                    equipment[item.Slot.ToString()] = wardrobeItem;
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "[WardrobeApplyInteractionHandler] Item not found or has no data for ID {Id}",
+                                    item.Id
+                                );
+                            }
+                            break;
+
+                        case "moditem":
+                            var modApplyLockId = $"wardrobe-{item.Slot.ToString().ToLowerInvariant()}";
+                            var canApplyMod = await _locksHandler.CheckCanModifySlotAsync(
+                                context.SenderFriendCode,
+                                context.TargetFriendCode,
+                                modApplyLockId
+                            );
+                            if (canApplyMod.Result != ActionResultEc.Success)
+                            {
+                                _logger.LogWarning(
+                                    "[WardrobeApplyInteractionHandler] Sender {Sender} cannot apply moditem to slot {Slot} for {Target}",
+                                    context.SenderFriendCode,
+                                    item.Slot,
+                                    context.TargetFriendCode
+                                );
+                                return ActionResultBuilder.Fail<Unit>(canApplyMod.Result);
+                            }
+                            if (modItems.TryGetValue(item.Id, out var modItemData) && modItemData.DataBase64 != null)
+                            {
+                                var modItem = DeserializeWardrobeItem(modItemData);
+                                if (modItem != null)
+                                {
+                                    modSettings[item.Id.ToString()] = modItem;
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "[WardrobeApplyInteractionHandler] ModItem not found or has no data for ID {Id}",
+                                    item.Id
+                                );
+                            }
+                            break;
+                    }
                 }
-                continue;
-            }
 
-            switch (item.Type)
-            {
-                case "set":
-                    var canApplySet = await _locksHandler.CheckCanModifySlotAsync(
-                        context.SenderFriendCode,
-                        context.TargetFriendCode,
-                        "wardrobe-baseset"
+                var newState = new WardrobeStateDto(baseLayerBase64, equipment, modSettings);
+                var success = await wardrobeDataService.UpdateWardrobeStateAsync(
+                    targetProfileId,
+                    newState,
+                    sql
+                );
+
+                if (!success)
+                {
+                    _logger.LogError(
+                        "[WardrobeApplyInteractionHandler] Failed to apply wardrobe for {Target}",
+                        context.TargetFriendCode
                     );
-                    if (canApplySet.Result != ActionResultEc.Success)
-                    {
-                        _logger.LogWarning(
-                            "[WardrobeApplyInteractionHandler] Sender {Sender} cannot apply set to {Target}",
-                            context.SenderFriendCode,
-                            context.TargetFriendCode
-                        );
-                        return ActionResultBuilder.Fail<Unit>(canApplySet.Result);
-                    }
-                    if (setItems.TryGetValue(item.Id, out var setItem) && setItem.DataBase64 != null)
-                    {
-                        baseLayerBase64 = setItem.DataBase64;
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            "[WardrobeApplyInteractionHandler] Set item not found or has no data for ID {Id}",
-                            item.Id
-                        );
-                        return ActionResultBuilder.Fail<Unit>(ActionResultEc.ValueNotSet);
-                    }
-                    break;
+                    return ActionResultBuilder.Fail<Unit>(ActionResultEc.Unknown);
+                }
 
-                case "item":
-                    var itemLockId = $"wardrobe-{item.Slot.ToString().ToLowerInvariant()}";
-                    var canApplyItem = await _locksHandler.CheckCanModifySlotAsync(
-                        context.SenderFriendCode,
-                        context.TargetFriendCode,
-                        itemLockId
-                    );
-                    if (canApplyItem.Result != ActionResultEc.Success)
-                    {
-                        _logger.LogWarning(
-                            "[WardrobeApplyInteractionHandler] Sender {Sender} cannot apply item to slot {Slot} for {Target}",
-                            context.SenderFriendCode,
-                            item.Slot,
-                            context.TargetFriendCode
-                        );
-                        return ActionResultBuilder.Fail<Unit>(canApplyItem.Result);
-                    }
-                    if (itemItems.TryGetValue(item.Id, out var wardrobeItemData) && wardrobeItemData.DataBase64 != null)
-                    {
-                        var wardrobeItem = DeserializeWardrobeItem(wardrobeItemData);
-                        if (wardrobeItem != null)
-                        {
-                            equipment[item.Slot.ToString()] = wardrobeItem;
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            "[WardrobeApplyInteractionHandler] Item not found or has no data for ID {Id}",
-                            item.Id
-                        );
-                    }
-                    break;
-
-                case "moditem":
-                    if (modItems.TryGetValue(item.Id, out var modItemData) && modItemData.DataBase64 != null)
-                    {
-                        var modItem = DeserializeWardrobeItem(modItemData);
-                        if (modItem != null)
-                        {
-                            modSettings[item.Name] = modItem;
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            "[WardrobeApplyInteractionHandler] ModItem not found or has no data for ID {Id}",
-                            item.Id
-                        );
-                    }
-                    break;
+                _logger.LogInformation(
+                    "[WardrobeApplyInteractionHandler] Successfully applied wardrobe for {Target}",
+                    context.TargetFriendCode
+                );
+                return ActionResultBuilder.Ok(Unit.Empty);
             }
-        }
-
-        var newState = new WardrobeStateDto(baseLayerBase64, equipment, modSettings);
-        var success = await wardrobeDataService.UpdateWardrobeStateAsync(
-            targetProfileId.Value,
-            newState
         );
-
-        if (!success)
-        {
-            _logger.LogError(
-                "[WardrobeApplyInteractionHandler] Failed to apply wardrobe for {Target}",
-                context.TargetFriendCode
-            );
-            return ActionResultBuilder.Fail<Unit>(ActionResultEc.Unknown);
-        }
-
-        _logger.LogInformation(
-            "[WardrobeApplyInteractionHandler] Successfully applied wardrobe for {Target}",
-            context.TargetFriendCode
-        );
-        return ActionResultBuilder.Ok(Unit.Empty);
     }
 
     private WardrobeItemData? DeserializeWardrobeItem(WardrobeDto dto)

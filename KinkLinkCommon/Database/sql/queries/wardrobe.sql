@@ -54,3 +54,6 @@ RETURNING id, profile_id, glamourerset, head, body, hand, legs, feet, earring, n
 SELECT id, profile_id, glamourerset, head, body, hand, legs, feet, earring, neck, bracelet, lring, rring, moditems
 FROM activewardrobe
 WHERE profile_id = $1;
+
+-- name: ClearWardrobeState :exec
+DELETE FROM activewardrobe WHERE profile_id = $1;
