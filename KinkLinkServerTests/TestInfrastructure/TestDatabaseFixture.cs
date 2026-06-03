@@ -21,7 +21,7 @@ public sealed class TestDatabaseFixture : IAsyncLifetime
             .WithPassword("test")
             .WithCleanUp(true)
             // increase max connections to avoid 'too many clients' in test runs
-            .WithCommand("-c", "max_connections=200")
+            .WithCommand("-c", "max_connections=500")
             .Build();
     }
 
@@ -98,7 +98,7 @@ public sealed class TestDatabaseFixture : IAsyncLifetime
         await conn.OpenAsync();
 
         await using var cmd = new Npgsql.NpgsqlCommand(
-            "TRUNCATE TABLE activewardrobe, wardrobe, Pairs, Profiles, Users RESTART IDENTITY CASCADE",
+            "TRUNCATE TABLE active_wardrobe, wardrobe, Pairs, Profiles, Users RESTART IDENTITY CASCADE",
             conn);
 
         await cmd.ExecuteNonQueryAsync();

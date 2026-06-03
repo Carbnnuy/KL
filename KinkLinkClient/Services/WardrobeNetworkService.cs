@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using KinkLinkClient.Utils;
 using KinkLinkCommon.Domain;
 using KinkLinkCommon.Domain.Enums;
@@ -12,7 +12,7 @@ using KinkLinkCommon.Domain.Wardrobe;
 
 namespace KinkLinkClient.Services;
 
-public class WardrobeNetworkService : IDisposable
+public class WardrobeNetworkService : IDisposable, IWardrobeNetworkService
 {
     private readonly NetworkService _networkService;
 
@@ -21,10 +21,12 @@ public class WardrobeNetworkService : IDisposable
         _networkService = networkService;
     }
 
-    public async Task<List<PairWardrobeItemDto>> QueryPairWardrobe(string friendCode)
+    public async Task<List<LightWardrobeItemDto>> QueryPairWardrobe(string friendCode)
     {
         var sw = Stopwatch.StartNew();
-        Plugin.Log.Information($"[WardrobeNetworkService] Enter QueryPairWardrobe friendCode={friendCode}");
+        Plugin.Log.Information(
+            $"[WardrobeNetworkService] Enter QueryPairWardrobe friendCode={friendCode}"
+        );
         try
         {
             var request = new QueryPairWardrobeRequest(friendCode);
@@ -40,25 +42,34 @@ public class WardrobeNetworkService : IDisposable
                 return response.Value.Items;
             }
 
-            return new List<PairWardrobeItemDto>();
+            return new List<LightWardrobeItemDto>();
         }
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit QueryPairWardrobe duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit QueryPairWardrobe duration={sw.ElapsedMilliseconds}ms"
+            );
         }
     }
 
-    public async Task<ActionResult<AddWardrobeItemResponse>> AddWardrobeItemAsync(AddWardrobeItemRequest request)
+    public async Task<ActionResult<AddWardrobeItemResponse>> AddWardrobeItemAsync(
+        AddWardrobeItemRequest request
+    )
     {
         var sw = Stopwatch.StartNew();
-        Plugin.Log.Information($"[WardrobeNetworkService] Enter AddWardrobeItemAsync requestType={request?.GetType().Name}");
+        Plugin.Log.Information(
+            $"[WardrobeNetworkService] Enter AddWardrobeItemAsync requestType={request?.GetType().Name}"
+        );
         try
         {
             try
             {
                 var response = await _networkService
-                    .InvokeAsync<ActionResult<AddWardrobeItemResponse>>(HubMethod.AddWardrobeItem, request)
+                    .InvokeAsync<ActionResult<AddWardrobeItemResponse>>(
+                        HubMethod.AddWardrobeItem,
+                        request
+                    )
                     .ConfigureAwait(false);
 
                 if (response.Result != ActionResultEc.Success)
@@ -74,27 +85,39 @@ public class WardrobeNetworkService : IDisposable
             catch (Exception ex)
             {
                 Plugin.Log.Error(ex, "[WardrobeNetworkService] Failed to add wardrobe item");
-                NotificationHelper.Error("Add Wardrobe Item", "Failed to add wardrobe item to server");
+                NotificationHelper.Error(
+                    "Add Wardrobe Item",
+                    "Failed to add wardrobe item to server"
+                );
                 return new ActionResult<AddWardrobeItemResponse>(ActionResultEc.Unknown, null);
             }
         }
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit AddWardrobeItemAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit AddWardrobeItemAsync duration={sw.ElapsedMilliseconds}ms"
+            );
         }
     }
 
-    public async Task<ActionResult<RemoveWardrobeItemResponse>> RemoveWardrobeItemAsync(RemoveWardrobeItemRequest request)
+    public async Task<ActionResult<RemoveWardrobeItemResponse>> RemoveWardrobeItemAsync(
+        RemoveWardrobeItemRequest request
+    )
     {
         var sw = Stopwatch.StartNew();
-        Plugin.Log.Information($"[WardrobeNetworkService] Enter RemoveWardrobeItemAsync requestType={request?.GetType().Name}");
+        Plugin.Log.Information(
+            $"[WardrobeNetworkService] Enter RemoveWardrobeItemAsync requestType={request?.GetType().Name}"
+        );
         try
         {
             try
             {
                 var response = await _networkService
-                    .InvokeAsync<ActionResult<RemoveWardrobeItemResponse>>(HubMethod.RemoveWardrobeItem, request)
+                    .InvokeAsync<ActionResult<RemoveWardrobeItemResponse>>(
+                        HubMethod.RemoveWardrobeItem,
+                        request
+                    )
                     .ConfigureAwait(false);
 
                 if (response.Result != ActionResultEc.Success)
@@ -120,20 +143,29 @@ public class WardrobeNetworkService : IDisposable
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit RemoveWardrobeItemAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit RemoveWardrobeItemAsync duration={sw.ElapsedMilliseconds}ms"
+            );
         }
     }
 
-    public async Task<ActionResult<GetWardrobeItemResponse>> GetWardrobeItemAsync(GetWardrobeItemRequest request)
+    public async Task<ActionResult<GetWardrobeItemResponse>> GetWardrobeItemAsync(
+        GetWardrobeItemRequest request
+    )
     {
         var sw = Stopwatch.StartNew();
-        Plugin.Log.Information($"[WardrobeNetworkService] Enter GetWardrobeItemAsync requestType={request?.GetType().Name}");
+        Plugin.Log.Information(
+            $"[WardrobeNetworkService] Enter GetWardrobeItemAsync requestType={request?.GetType().Name}"
+        );
         try
         {
             try
             {
                 var response = await _networkService
-                    .InvokeAsync<ActionResult<GetWardrobeItemResponse>>(HubMethod.GetWardrobeItem, request)
+                    .InvokeAsync<ActionResult<GetWardrobeItemResponse>>(
+                        HubMethod.GetWardrobeItem,
+                        request
+                    )
                     .ConfigureAwait(false);
 
                 return response;
@@ -151,7 +183,9 @@ public class WardrobeNetworkService : IDisposable
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit GetWardrobeItemAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit GetWardrobeItemAsync duration={sw.ElapsedMilliseconds}ms"
+            );
         }
     }
 
@@ -164,7 +198,9 @@ public class WardrobeNetworkService : IDisposable
             try
             {
                 var response = await _networkService
-                    .InvokeAsync<ActionResult<ListWardrobeItemsResponse>>(HubMethod.ListWardrobeItems)
+                    .InvokeAsync<ActionResult<ListWardrobeItemsResponse>>(
+                        HubMethod.ListWardrobeItems
+                    )
                     .ConfigureAwait(false);
 
                 return response;
@@ -182,46 +218,47 @@ public class WardrobeNetworkService : IDisposable
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit ListWardrobeItemsAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit ListWardrobeItemsAsync duration={sw.ElapsedMilliseconds}ms"
+            );
         }
     }
 
-    public async Task<ActionResult<SetWardrobeStatusResponse>> SetWardrobeStatusAsync(SetWardrobeStatusRequest request)
+    public async Task<ActionResult<bool>> SetActiveWardrobeLayerAsync(
+        WardrobeLayer layer,
+        WardrobeItem item
+    )
     {
-        var sw = Stopwatch.StartNew();
-        Plugin.Log.Information("[WardrobeNetworkService] Enter SetWardrobeStatusAsync");
+        Plugin.Log.Information(
+            $"[WardrobeNetworkService] Enter SetActiveWardrobeLayerAsync layer={layer} itemId={item.Id}"
+        );
         try
         {
-            try
-            {
-                var response = await _networkService
-                    .InvokeAsync<ActionResult<SetWardrobeStatusResponse>>(HubMethod.SetWardrobeStatus, request)
-                    .ConfigureAwait(false);
+            var dto = new WardrobeDto(
+                item.Id,
+                item.Name,
+                item.Description,
+                item.Layer,
+                GlamourerDesignHelper.ToBase64(item.Design),
+                item.Priority
+            );
+            var request = new SetActiveWardrobeLayerRequest(layer, dto);
 
-                if (response.Result != ActionResultEc.Success)
-                {
-                    NotificationHelper.Error(
-                        "Set Wardrobe Status",
-                        $"Failed to set wardrobe status: {response.Result}"
-                    );
-                }
+            // debug log: layer, item id, base64 length
+            Plugin.Log.Information("[WardrobeNetworkService] Invoke SetActiveWardrobeLayer layer={Layer} itemId={ItemId} dto_layer={DtoLayer} base64_len={Len}", layer, item.Id, dto.Layer, dto.Base64GlamourerData?.Length ?? 0);
 
-                return response;
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.Error(ex, "[WardrobeNetworkService] Failed to set wardrobe status");
-                NotificationHelper.Error(
-                    "Set Wardrobe Status",
-                    "Failed to set wardrobe status on server"
-                );
-                return new ActionResult<SetWardrobeStatusResponse>(ActionResultEc.Unknown, null);
-            }
+            return await _networkService
+                .InvokeAsync<ActionResult<bool>>(HubMethod.SetActiveWardrobeLayer, request)
+                .ConfigureAwait(false);
         }
-        finally
+        catch (Exception ex)
         {
-            sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit SetWardrobeStatusAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Error(ex, "[WardrobeNetworkService] Failed to set active wardrobe layer");
+            NotificationHelper.Error(
+                "Set Active Wardrobe Layer",
+                "Failed to set active wardrobe layer on server"
+            );
+            return new ActionResult<bool>(ActionResultEc.Unknown, false);
         }
     }
 
@@ -234,7 +271,9 @@ public class WardrobeNetworkService : IDisposable
             try
             {
                 var response = await _networkService
-                    .InvokeAsync<ActionResult<GetWardrobeStatusResponse>>(HubMethod.GetWardrobeStatus)
+                    .InvokeAsync<ActionResult<GetWardrobeStatusResponse>>(
+                        HubMethod.GetWardrobeStatus
+                    )
                     .ConfigureAwait(false);
 
                 return response;
@@ -252,18 +291,25 @@ public class WardrobeNetworkService : IDisposable
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit GetWardrobeStatusAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit GetWardrobeStatusAsync duration={sw.ElapsedMilliseconds}ms"
+            );
         }
     }
 
-    public async Task<ActionResult<RandomizeActiveWardrobeResponse>> RandomizeActiveWardrobeAsync(RandomizeActiveWardrobeRequest request)
+    public async Task<ActionResult<RandomizeActiveWardrobeResponse>> RandomizeActiveWardrobeAsync(
+        RandomizeActiveWardrobeRequest request
+    )
     {
         var sw = Stopwatch.StartNew();
         Plugin.Log.Information("[WardrobeNetworkService] Enter RandomizeActiveWardrobeAsync");
         try
         {
             var response = await _networkService
-                .InvokeAsync<ActionResult<RandomizeActiveWardrobeResponse>>(HubMethod.RandomizeActiveWardrobe, request)
+                .InvokeAsync<ActionResult<RandomizeActiveWardrobeResponse>>(
+                    HubMethod.RandomizeActiveWardrobe,
+                    request
+                )
                 .ConfigureAwait(false);
 
             if (response.Result != ActionResultEc.Success)
@@ -279,13 +325,43 @@ public class WardrobeNetworkService : IDisposable
         catch (Exception ex)
         {
             Plugin.Log.Error(ex, "[WardrobeNetworkService] Failed to randomize wardrobe");
-            NotificationHelper.Error("Randomize Wardrobe", "Failed to randomize wardrobe on server");
+            NotificationHelper.Error(
+                "Randomize Wardrobe",
+                "Failed to randomize wardrobe on server"
+            );
             return new ActionResult<RandomizeActiveWardrobeResponse>(ActionResultEc.Unknown, null);
         }
         finally
         {
             sw.Stop();
-            Plugin.Log.Information($"[WardrobeNetworkService] Exit RandomizeActiveWardrobeAsync duration={sw.ElapsedMilliseconds}ms");
+            Plugin.Log.Information(
+                $"[WardrobeNetworkService] Exit RandomizeActiveWardrobeAsync duration={sw.ElapsedMilliseconds}ms"
+            );
+        }
+    }
+
+    public async Task<ActionResult<bool>> ClearActiveWardrobeLayerAsync(WardrobeLayer layer)
+    {
+        var correlationId = Guid.NewGuid();
+        Plugin.Log.Information("[WardrobeNetworkService] Enter ClearActiveWardrobeLayerAsync correlationId={CorrelationId} layer={Layer}", correlationId, layer);
+        try
+        {
+            var request = new SetActiveWardrobeLayerRequest(layer, null);
+            var response = await _networkService
+                .InvokeAsync<ActionResult<bool>>(HubMethod.SetActiveWardrobeLayer, request)
+                .ConfigureAwait(false);
+
+            Plugin.Log.Information("[WardrobeNetworkService] Exit ClearActiveWardrobeLayerAsync correlationId={CorrelationId} success={Success}", correlationId, response.Result == ActionResultEc.Success);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "[WardrobeNetworkService] Failed to clear active wardrobe layer correlationId={CorrelationId}", correlationId);
+            NotificationHelper.Error(
+                "Clear Active Wardrobe Layer",
+                "Failed to clear active wardrobe layer on server"
+            );
+            return new ActionResult<bool>(ActionResultEc.Unknown, false);
         }
     }
 

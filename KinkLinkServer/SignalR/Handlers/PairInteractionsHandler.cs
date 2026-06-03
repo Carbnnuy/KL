@@ -1,28 +1,18 @@
 using KinkLinkCommon.Domain;
-using KinkLinkCommon.Domain.CharacterState;
 using KinkLinkCommon.Domain.Enums;
 using KinkLinkCommon.Domain.Enums.Permissions;
 using KinkLinkCommon.Domain.Network;
 using KinkLinkCommon.Domain.Network.PairInteractions;
-using KinkLinkCommon.Domain.Network.SyncPairState;
 using KinkLinkCommon.Domain.Wardrobe;
-using KinkLinkCommon.Util;
-using KinkLinkServer.Domain;
-using KinkLinkServer.Domain.Interfaces;
-using KinkLinkServer.Managers;
 using KinkLinkServer.Services;
-using KinkLinkServer.SignalR.Handlers.Interactions;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
 
 namespace KinkLinkServer.SignalR.Handlers;
 
 public class PairInteractionsHandler(
     PermissionsService permissionsService,
     WardrobeDataService wardrobeDataService,
+    IActiveWardrobeStateService activeWardrobeStateService,
     KinkLinkProfilesService profilesService,
-    IPresenceService presenceService,
-    IPairInteractionHandlerFactory handlerFactory,
     LocksHandler locksHandler,
     ILogger<PairInteractionsHandler> logger
 )
@@ -73,7 +63,9 @@ public class PairInteractionsHandler(
         {
             return ActionResultBuilder.Fail<QueryPairStateResponse>(ActionResultEc.ClientBadData);
         }
-        var wardrobe = await wardrobeDataService.GetPairWardrobeItemsAsync(targetProfileId.Value);
+        var wardrobe = await activeWardrobeStateService.GetPairWardrobeStateAsync(
+            targetProfileId.Value
+        );
         var locks = await locksHandler.GetAllLocksForUserAsync(request.TargetFriendCode);
         logger.LogInformation(
             "[QueryPairState] Target={Target}, Locks count={LockCount}",
@@ -89,7 +81,7 @@ public class PairInteractionsHandler(
                 l.LockerID
             );
         }
-        var wardrobeWithLocks = PairWardrobeStateDto.PopulateLockIds(wardrobe, locks, logger);
+        var wardrobeWithLocks = PairWardrobeStateDto.PopulateLockIds(wardrobe, locks);
 
         return new ActionResult<QueryPairStateResponse>(
             ActionResultEc.Success,
@@ -102,267 +94,64 @@ public class PairInteractionsHandler(
         );
     }
 
-    private static readonly string[] WardrobeSlots =
-    [
-        "Head",
-        "Body",
-        "Hands",
-        "Legs",
-        "Feet",
-        "Ears",
-        "Neck",
-        "Wrists",
-        "RFinger",
-        "LFinger",
-    ];
-
-    public async Task<(
-        ActionResult<Unit> Result,
-        string TargetFriendCode,
-        PairAction Action
-    )> ApplyInteraction(string senderFriendCode, ApplyInteractionRequest request)
-    {
-        logger.LogInformation(
-            "[PairInteractionsHandler] ApplyInteraction: Sender={Sender}, Target={Target}, Action={Action}",
-            senderFriendCode,
-            request.TargetFriendCode,
-            request.Action
-        );
-
-        if (request.Action == PairAction.ApplyWardrobe && request.Payload?.WardrobeItems != null)
+    private static string SlotNameFromLayer(WardrobeLayer layer) =>
+        layer switch
         {
-            logger.LogInformation(
-                "[PairInteractionsHandler] ApplyWardrobe: {Count} items in payload",
-                request.Payload.WardrobeItems.Count
-            );
-        }
-
-        if (presenceService.TryGet(senderFriendCode) is not { } sender)
-        {
-            logger.LogWarning(
-                "[PairInteractionsHandler] Sender {Sender} not online",
-                senderFriendCode
-            );
-            return (
-                ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetOffline),
-                string.Empty,
-                request.Action
-            );
-        }
-
-        var permissions = await permissionsService.GetPermissions(
-            senderFriendCode,
-            request.TargetFriendCode
-        );
-        if (permissions == null)
-        {
-            logger.LogWarning(
-                "[PairInteractionsHandler] No permissions between {Sender} and {Target}",
-                senderFriendCode,
-                request.TargetFriendCode
-            );
-            return (
-                ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetNotFriends),
-                string.Empty,
-                request.Action
-            );
-        }
-
-        var grantedBy = permissions.PermissionsGrantedBy;
-        if (grantedBy == null)
-        {
-            logger.LogWarning(
-                "[PairInteractionsHandler] Target {Target} has not granted permissions to {Sender}",
-                request.TargetFriendCode,
-                senderFriendCode
-            );
-            return (
-                ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetHasNotGrantedSenderPermissions),
-                string.Empty,
-                request.Action
-            );
-        }
-
-        logger.LogInformation(
-            "[PairInteractionsHandler] Permissions check: GrantedBy={Perms}, Required={Required}",
-            grantedBy.Perms,
-            request.Action.ToInteractionPerm()
-        );
-
-        if (!grantedBy.Perms.HasFlag(request.Action.ToInteractionPerm()))
-        {
-            logger.LogWarning(
-                "[PairInteractionsHandler] Action {Action} not permitted for {Sender}. Has={HasPerms}",
-                request.Action,
-                senderFriendCode,
-                grantedBy.Perms
-            );
-            return (
-                ActionResultBuilder.Fail<Unit>(ActionResultEc.TargetHasNotGrantedSenderPermissions),
-                string.Empty,
-                request.Action
-            );
-        }
-
-        var targetFriendCode = request.TargetFriendCode;
-        var context = new InteractionContext(senderFriendCode, targetFriendCode, permissions);
-
-        ActionResult<Unit> result;
-
-        if (request.Action == PairAction.UnlockWardrobe)
-        {
-            result = await HandleUnlockAsync(context, request.Payload);
-        }
-        else
-        {
-            var handler = handlerFactory.GetHandler(request.Action);
-            if (handler == null)
-            {
-                logger.LogWarning(
-                    "[PairInteractionsHandler] No handler found for action {Action}",
-                    request.Action
-                );
-                return (
-                    ActionResultBuilder.Fail<Unit>(ActionResultEc.Unknown),
-                    string.Empty,
-                    request.Action
-                );
-            }
-
-            result = await handler.HandleAsync(context, request.Payload);
-
-            if (result.Result != ActionResultEc.Success)
-            {
-                logger.LogWarning(
-                    "[PairInteractionsHandler] Handler returned error {Error}",
-                    result.Result
-                );
-                return (result, string.Empty, request.Action);
-            }
-
-            logger.LogInformation("[PairInteractionsHandler] Handler completed successfully");
-        }
-
-        return (ActionResultBuilder.Ok(Unit.Empty), targetFriendCode, request.Action);
-    }
+            WardrobeLayer.Outfit => "Outfit",
+            WardrobeLayer.Head => "Head",
+            WardrobeLayer.Chest => "Body",
+            WardrobeLayer.Hands => "Hands",
+            WardrobeLayer.Legs => "Legs",
+            WardrobeLayer.Feet => "Feet",
+            WardrobeLayer.Ears => "Ears",
+            WardrobeLayer.Neck => "Neck",
+            WardrobeLayer.Wrists => "Wrists",
+            WardrobeLayer.RFinger => "RFinger",
+            WardrobeLayer.LFinger => "LFinger",
+            WardrobeLayer.Mods => "Mods",
+            _ => layer.ToString(),
+        };
 
     private async Task<ActionResult<Unit>> HandleUnlockAsync(
-        InteractionContext context,
-        InteractionPayload? payload
+        string senderFriendCode,
+        string targetFriendCode,
+        LockInfoDto lockInfo
     )
     {
         logger.LogInformation(
-            "[PairInteractionsHandler] HandleUnlockAsync: Sender={Sender}, Target={Target}, HasPayload={HasPayload}",
-            context.SenderFriendCode,
-            context.TargetFriendCode,
-            payload != null
+            "[PairInteractionsHandler] HandleUnlockAsync: Sender={Sender}, Target={Target}",
+            senderFriendCode,
+            targetFriendCode
         );
 
-        var slotToLockIdMap = new Dictionary<string, string>
-        {
-            ["set"] = "wardrobe-baseset",
-            ["Head"] = "wardrobe-head",
-            ["Body"] = "wardrobe-body",
-            ["Hands"] = "wardrobe-hands",
-            ["Legs"] = "wardrobe-legs",
-            ["Feet"] = "wardrobe-feet",
-            ["Ears"] = "wardrobe-ears",
-            ["Neck"] = "wardrobe-neck",
-            ["Wrists"] = "wardrobe-wrists",
-            ["RFinger"] = "wardrobe-rfinger",
-            ["LFinger"] = "wardrobe-lfinger",
-        };
+        logger.LogInformation(
+            "[PairInteractionsHandler] Attempting to unlock: LockId={LockId}",
+            lockInfo.LockID
+        );
 
-        var allLockIds = slotToLockIdMap.Values.ToList();
+        var removeResult = await locksHandler.HandleRemoveLockAsync(
+            senderFriendCode,
+            lockInfo.LockID,
+            targetFriendCode,
+            // TODO add passwords to the payload and plumb it in.
+            null
+        );
 
-        List<string> lockIdsToProcess;
-        if (payload?.WardrobeItems != null && payload.WardrobeItems.Count > 0)
+        if (removeResult.Result.Result == ActionResultEc.Success)
         {
             logger.LogInformation(
-                "[PairInteractionsHandler] Unlock payload has {Count} items",
-                payload.WardrobeItems.Count
+                "[PairInteractionsHandler] Successfully unlocked {LockId}",
+                lockInfo.LockID
             );
-
-            lockIdsToProcess = payload
-                .WardrobeItems.Where(item => item.Type == "set" || item.Type == "item")
-                .Select(item =>
-                {
-                    var slotKey = item.Type == "set" ? "set" : item.Slot.ToString();
-                    logger.LogDebug(
-                        "[PairInteractionsHandler] Processing item: Type={Type}, Slot={Slot}, SlotKey={SlotKey}",
-                        item.Type,
-                        item.Slot,
-                        slotKey
-                    );
-                    return slotToLockIdMap.TryGetValue(slotKey, out var lockId) ? lockId : null;
-                })
-                .Where(lockId => lockId != null)
-                .Cast<string>()
-                .ToList();
-
-            logger.LogInformation(
-                "[PairInteractionsHandler] Mapped {Count} lock IDs from payload",
-                lockIdsToProcess.Count
-            );
-
-            if (lockIdsToProcess.Count == 0)
-            {
-                logger.LogInformation(
-                    "[PairInteractionsHandler] No lock IDs from payload, processing all"
-                );
-                lockIdsToProcess = allLockIds;
-            }
         }
         else
         {
-            logger.LogInformation("[PairInteractionsHandler] No payload, processing all lock IDs");
-            lockIdsToProcess = allLockIds;
-        }
-
-        var successCount = 0;
-        var failCount = 0;
-
-        foreach (var lockId in lockIdsToProcess)
-        {
-            logger.LogInformation(
-                "[PairInteractionsHandler] Attempting to unlock: LockId={LockId}",
-                lockId
+            logger.LogWarning(
+                "[PairInteractionsHandler] Failed to unlock {LockId}: {Error}",
+                lockInfo.LockID,
+                removeResult.Result.Result
             );
-
-            var removeResult = await locksHandler.HandleRemoveLockAsync(
-                context.SenderFriendCode,
-                lockId,
-                context.TargetFriendCode,
-                // TODO add passwords to the payload and plumb it in.
-                null
-            );
-
-            if (removeResult.Result.Result == ActionResultEc.Success)
-            {
-                successCount++;
-                logger.LogInformation(
-                    "[PairInteractionsHandler] Successfully unlocked {LockId}",
-                    lockId
-                );
-            }
-            else
-            {
-                failCount++;
-                logger.LogWarning(
-                    "[PairInteractionsHandler] Failed to unlock {LockId}: {Error}",
-                    lockId,
-                    removeResult.Result.Result
-                );
-            }
         }
-
-        logger.LogInformation(
-            "[PairInteractionsHandler] Unlock completed: {Success} succeeded, {Fail} failed for {Target}",
-            successCount,
-            failCount,
-            context.TargetFriendCode
-        );
-
         return ActionResultBuilder.Ok(Unit.Empty);
     }
 
@@ -416,7 +205,9 @@ public class PairInteractionsHandler(
             );
         }
 
-        var wardrobeState = await wardrobeDataService.GetWardrobeStateAsync(targetProfileId.Value);
+        var wardrobeState = await activeWardrobeStateService.GetPairWardrobeStateAsync(
+            targetProfileId.Value
+        );
 
         return new ActionResult<QueryPairWardrobeStateResponse>(
             ActionResultEc.Success,
@@ -428,7 +219,7 @@ public class PairInteractionsHandler(
         );
     }
 
-    public async Task<ActionResult<QueryPairWardrobeResponse>> QueryWardrobeAsync(
+    public async Task<ActionResult<QueryPairWardrobeResponse>> QueryPairWardrobeAsync(
         string senderFriendCode,
         QueryPairWardrobeRequest request
     )
@@ -480,13 +271,13 @@ public class PairInteractionsHandler(
 
         var filteredItems = allItems
             .Where(item => item.Priority <= grantedBy.Priority)
-            .Select(item => new PairWardrobeItemDto(
+            .Select(item => new LightWardrobeItemDto(
                 item.Id,
                 item.Name,
                 item.Description,
-                item.Slot,
+                (WardrobeLayer)item.Layer,
                 item.Priority,
-                item.LockId
+                null
             ))
             .ToList();
 
@@ -495,6 +286,105 @@ public class PairInteractionsHandler(
         );
     }
 
-    public static bool IsLockModificationAction(PairAction action) =>
-        action is PairAction.LockWardrobe or PairAction.UnlockWardrobe;
+    public async Task<ActionResult<ActionResultEc>> UpdateWardrobeStateAsync(
+        string senderFriendCode,
+        string targetFriendCode,
+        WardrobeLayer layer,
+        Guid? id
+    )
+    {
+        if (string.IsNullOrWhiteSpace(targetFriendCode))
+        {
+            return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.ClientBadData);
+        }
+
+        if (senderFriendCode == targetFriendCode)
+        {
+            return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.ClientBadData);
+        }
+
+        var permissions = await permissionsService.GetPermissions(senderFriendCode, targetFriendCode);
+        if (permissions == null)
+        {
+            return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.TargetNotFriends);
+        }
+
+        var grantedBy = permissions.PermissionsGrantedBy;
+        if (grantedBy == null || !grantedBy.Perms.HasFlag(InteractionPerms.CanApplyWardrobe))
+        {
+            return ActionResultBuilder.Fail<ActionResultEc>(
+                ActionResultEc.TargetHasNotGrantedSenderPermissions
+            );
+        }
+
+        var targetProfileId = await profilesService.GetProfileIdFromUidAsync(targetFriendCode);
+        if (targetProfileId == null)
+        {
+            return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.TargetNotFriends);
+        }
+
+        // If id specified, ensure item exists and priority allowed
+        if (id is { } wardrobeId)
+        {
+            var item = await wardrobeDataService.GetWardrobeItemByGuid(
+                targetProfileId.Value,
+                wardrobeId
+            );
+            if (item == null)
+            {
+                logger.LogWarning(
+                    "[PairInteractionsHandler] Wardrobe item not found: {WardrobeId} for {Target}",
+                    wardrobeId,
+                    targetFriendCode
+                );
+                return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.ClientBadData);
+            }
+
+            if ((int)item.Priority > (int)grantedBy.Priority)
+            {
+                logger.LogWarning(
+                    "[PairInteractionsHandler] Sender {Sender} insufficient priority to apply wardrobe {WardrobeId} (itemPriority={ItemPriority} grantedPriority={GrantedPriority})",
+                    senderFriendCode,
+                    wardrobeId,
+                    item.Priority,
+                    grantedBy.Priority
+                );
+                return ActionResultBuilder.Fail<ActionResultEc>(
+                    ActionResultEc.LockInsufficientPriority
+                );
+            }
+
+            // Ensure the item's layer matches the target layer being applied to
+            if (item.Layer != layer)
+            {
+                logger.LogWarning(
+                    "[PairInteractionsHandler] Item {WardrobeId} layer mismatch: itemLayer={ItemLayer} targetLayer={TargetLayer}",
+                    wardrobeId,
+                    item.Layer,
+                    layer
+                );
+                return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.ClientBadData);
+            }
+        }
+
+        var updateResult = await activeWardrobeStateService.UpdateWardrobeStateAsync(
+            targetProfileId.Value,
+            layer,
+            id
+        );
+
+        if (!updateResult)
+        {
+            return ActionResultBuilder.Fail<ActionResultEc>(ActionResultEc.Unknown);
+        }
+
+        logger.LogInformation(
+            "[PairInteractionsHandler] Updated wardrobe state: Target={Target} Layer={Layer} Id={Id}",
+            targetFriendCode,
+            layer,
+            id
+        );
+
+        return ActionResultBuilder.Ok(ActionResultEc.Success);
+    }
 }

@@ -18,7 +18,7 @@ public class GetAccountDataHandler(
     IPresenceService presenceService,
     KinkLinkProfilesService profilesService,
     LocksHandler locksHandler,
-    WardrobeDataService wardrobeDataService,
+    IActiveWardrobeStateService wardrobeDataService,
     ILogger<GetAccountDataHandler> logger
 )
 {
@@ -63,10 +63,10 @@ public class GetAccountDataHandler(
                 permission.TargetUID,
                 locks.Count
             );
-            var wardrobe = await wardrobeDataService.GetPairWardrobeItemsAsync(
+            var wardrobe = await wardrobeDataService.GetPairWardrobeStateAsync(
                 targetProfileId.Value
             );
-            var wardrobeWithLocks = PairWardrobeStateDto.PopulateLockIds(wardrobe, locks, logger);
+            var wardrobeWithLocks = PairWardrobeStateDto.PopulateLockIds(wardrobe, locks);
             pairStates[permission.TargetUID] = new QueryPairStateResponse(
                 permission.TargetUID,
                 permission.PermissionsGrantedTo,

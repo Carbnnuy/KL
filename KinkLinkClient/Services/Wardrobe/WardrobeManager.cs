@@ -8,7 +8,6 @@ using KinkLinkClient.Dependencies.Penumbra.Services;
 using KinkLinkClient.Utils;
 using KinkLinkCommon.Dependencies.Glamourer;
 using KinkLinkCommon.Dependencies.Glamourer.Components;
-using KinkLinkCommon.Domain.Enums;
 using KinkLinkCommon.Domain.Wardrobe;
 using Newtonsoft.Json.Linq;
 
@@ -19,32 +18,30 @@ public partial class WardrobeManager : IDisposable
     private readonly LockService _lockService;
     private readonly PenumbraService _penumbraService;
     private readonly GlamourerService _glamourerService;
-    private readonly WardrobeNetworkService _wardrobeNetworkService;
+    private readonly IWardrobeNetworkService _wardrobeNetworkService;
 
-    private readonly Dictionary<Guid, WardrobeItem> _items = [];
-    private readonly Dictionary<Guid, WardrobeSet> _sets = [];
-    private readonly Dictionary<Guid, WardrobeItem> _modItems = [];
+    private readonly Dictionary<Guid, WardrobeItem> _wardrobeLibrary =
+        new Dictionary<Guid, WardrobeItem>();
 
     public ActiveWardrobe ActiveSet { get; }
 
-    public IReadOnlyList<WardrobeItem> WardrobePieces => [.. _items.Values];
-    public IReadOnlyList<WardrobeSet> ImportedSets => [.. _sets.Values];
-    public IReadOnlyList<WardrobeItem> ModItems => [.. _modItems.Values];
+    public IReadOnlyList<WardrobeItem> WardrobeLibrary => _wardrobeLibrary.Values.ToList();
 
     public WardrobeManager(
         LockService lockService,
         GlamourerService glamourerService,
         PenumbraService penumbraService,
-        WardrobeNetworkService wardrobeNetworkService
+        IWardrobeNetworkService wardrobeNetworkService
     )
     {
         _lockService = lockService;
         _penumbraService = penumbraService;
         _glamourerService = glamourerService;
         _wardrobeNetworkService = wardrobeNetworkService;
-        ActiveSet = new();
+        ActiveSet = new ActiveWardrobe();
 
         _glamourerService.IpcReady += OnIpcReady;
+        _penumbraService.IpcReady += OnPenumbraIpcReady;
         if (_glamourerService.ApiAvailable)
         {
             _ = RefreshGlamourerDesignsAsync();
@@ -53,31 +50,49 @@ public partial class WardrobeManager : IDisposable
 
     private void OnIpcReady(object? sender, EventArgs e)
     {
-        Plugin.Log.Information("Glamourer IPC became ready, refreshing designs");
+        Plugin.Log.Information(
+            "Glamourer IPC became ready, refreshing designs and reapplying active wardrobe"
+        );
         _ = RefreshGlamourerDesignsAsync();
+        _ = ReapplyActiveWardrobeAsync();
     }
 
-    private string GetWardrobeLockId(GlamourerEquipmentSlot slot)
+    private void OnPenumbraIpcReady(object? sender, EventArgs e)
     {
-        return $"wardrobe-{slot.ToString().ToLowerInvariant()}";
+        Plugin.Log.Information(
+            "Penumbra IPC became ready, reapplying active wardrobe mods"
+        );
+        _ = ReapplyActiveWardrobeAsync();
     }
 
-    private string GetWardrobeLockId(string slotName)
+    // Used for first sync
+    private async Task ReapplyActiveWardrobeAsync()
     {
-        return $"wardrobe-{slotName.ToLowerInvariant()}";
+        try
+        {
+            if (!ActiveSet.IsActive())
+                return;
+
+            Plugin.Log.Information("[WardrobeManager] Reapplying active wardrobe after IPC ready");
+            await SyncModItems().ConfigureAwait(false);
+            var merged = ActiveSet.GetCurrentState();
+            await _glamourerService.ApplyDesignAsync(merged).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(
+                ex,
+                "[WardrobeManager] Failed to reapply active wardrobe after IPC ready"
+            );
+        }
     }
 
-    public bool IsSlotLocked(GlamourerEquipmentSlot slot)
+    public bool IsLayerLocked(WardrobeLayer layer)
     {
-        var lockId = GetWardrobeLockId(slot);
-        return _lockService.IsLocked(lockId);
+        return _lockService.IsLocked(layer.ToString());
     }
 
-    public bool IsSlotLocked(string slotName)
-    {
-        var lockId = GetWardrobeLockId(slotName);
-        return _lockService.IsLocked(lockId);
-    }
+    public bool GlamourerApiAvailable => _glamourerService.ApiAvailable;
 
     public async Task<List<Design>> RefreshGlamourerDesignsAsync()
     {
@@ -101,6 +116,14 @@ public partial class WardrobeManager : IDisposable
             return new();
         }
         return await _penumbraService.GetAllMods();
+    }
+
+    public void AddDesign(WardrobeItem item)
+    {
+        // Deduplicate by design identifier if available
+        // Register item with server.
+        // If it is valid, the server will send the item back via a push command
+        _ = SyncItemToServer(item);
     }
 
     public async Task<GlamourerItem?> GetGlamourSlotFromPlayer(GlamourerEquipmentSlot slot)
@@ -156,6 +179,7 @@ public partial class WardrobeManager : IDisposable
     public void Dispose()
     {
         _glamourerService.IpcReady -= OnIpcReady;
+        _penumbraService.IpcReady -= OnPenumbraIpcReady;
         _penumbraService.ClearAllTemporaryMods();
         GC.SuppressFinalize(this);
     }

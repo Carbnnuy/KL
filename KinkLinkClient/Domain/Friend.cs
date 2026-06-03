@@ -1,6 +1,6 @@
 using KinkLinkCommon.Domain;
 using KinkLinkCommon.Domain.Enums;
-using KinkLinkCommon.Domain.Enums.Permissions;
+using KinkLinkCommon.Domain.Wardrobe;
 
 namespace KinkLinkClient.Domain;
 
@@ -11,8 +11,7 @@ public class Friend(
     //string alias,
     string? note = null,
     UserPermissions? permissionsGrantedToFriend = null,
-    UserPermissions? permissionsGrantedByFriend = null,
-    InteractionContext? interactionContext = null
+    UserPermissions? permissionsGrantedByFriend = null
 )
 {
     /// <summary>
@@ -39,7 +38,7 @@ public class Friend(
         permissionsGrantedByFriend ?? new UserPermissions();
 
     public long LastInteractedWith = 0;
-    public InteractionContext? InteractionState { get; set; } = interactionContext;
+    public PairWardrobeStateDto? WardrobeState { get; set; } = null;
 
     public string NoteOrFriendCode => Note ?? FriendCode;
     public bool HasGagPermission =>
@@ -51,4 +50,9 @@ public class Friend(
     public bool HasMoodlePermission =>
         PermissionsGrantedByFriend.Perms.HasFlag(InteractionPerms.CanApplyOwnMoodles)
         || PermissionsGrantedByFriend.Perms.HasFlag(InteractionPerms.CanApplyPairsMoodles);
+
+    public void ClearState()
+    {
+        WardrobeState = null;
+    }
 }

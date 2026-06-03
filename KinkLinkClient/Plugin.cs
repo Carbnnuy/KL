@@ -21,6 +21,7 @@ using KinkLinkClient.UI.Views.Chat;
 using KinkLinkClient.UI.Views.CursedLoot;
 using KinkLinkClient.UI.Views.CustomizePlus;
 using KinkLinkClient.UI.Views.Debug;
+using KinkLinkClient.UI.Views.DressUp;
 using KinkLinkClient.UI.Views.Emote;
 using KinkLinkClient.UI.Views.Friends;
 using KinkLinkClient.UI.Views.Gags;
@@ -32,10 +33,10 @@ using KinkLinkClient.UI.Views.Locks;
 using KinkLinkClient.UI.Views.Login;
 using KinkLinkClient.UI.Views.Moodles;
 using KinkLinkClient.UI.Views.Pause;
-using KinkLinkClient.UI.Views.UserProfile;
 using KinkLinkClient.UI.Views.Settings;
 using KinkLinkClient.UI.Views.Speak;
 using KinkLinkClient.UI.Views.Status;
+using KinkLinkClient.UI.Views.UserProfile;
 using KinkLinkClient.UI.Views.Wardrobe;
 using KinkLinkClient.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,6 +125,10 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<MoodlesService>();
         services.AddSingleton<PenumbraService>();
         services.AddSingleton<WardrobeNetworkService>();
+        // Expose interface for easier testing
+        services.AddSingleton<IWardrobeNetworkService>(sp =>
+            sp.GetRequiredService<WardrobeNetworkService>()
+        );
         services.AddSingleton<WardrobeManager>();
 
         // Managers
@@ -145,7 +150,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<LockCommandHandler>();
         services.AddSingleton<LockSyncHandler>();
         services.AddSingleton<MoodlesHandler>();
-        services.AddSingleton<PairInteractionsHandler>();
+        services.AddSingleton<PairInteractionNetworkService>();
         services.AddSingleton<SpeakHandler>();
         services.AddSingleton<SyncOnlineStatusHandler>();
         services.AddSingleton<SyncPairStateHandler>();
@@ -164,7 +169,8 @@ public sealed class Plugin : IDalamudPlugin
         // Ui - View Controllers
         services.AddSingleton<ChatViewUiController>();
         services.AddSingleton<CustomizePlusViewUiController>();
-        services.AddSingleton<DebugViewUiController>();
+        // Debug view removed during refactor
+        // services.AddSingleton<DebugViewUiController>();
         services.AddSingleton<EmoteViewUiController>();
         services.AddSingleton<KinkLinkClient.UI.Views.Friends.PairsViewUiController>();
         services.AddSingleton<HistoryViewUiController>();
@@ -181,9 +187,9 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<GagsViewUiController>();
         services.AddSingleton<GamesViewUiController>();
         services.AddSingleton<InteractionsViewUiController>();
-        services.AddSingleton<InteractionsViewUiController>();
         services.AddSingleton<LocksViewUiController>();
         services.AddSingleton<WardrobeViewUiController>();
+        services.AddSingleton<DressupViewUiController>();
 
         // Ui - Views
         services.AddSingleton<ChatViewUi>();
@@ -207,6 +213,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<InteractionsViewUi>();
         services.AddSingleton<LocksViewUi>();
         services.AddSingleton<WardrobeViewUi>();
+        services.AddSingleton<DressupViewUi>();
         //
         // Ui - Windows
         services.AddSingleton<MainWindow>();
@@ -237,7 +244,7 @@ public sealed class Plugin : IDalamudPlugin
         _services.GetRequiredService<LockCommandHandler>();
         _services.GetRequiredService<LockSyncHandler>();
         _services.GetRequiredService<MoodlesHandler>();
-        _services.GetRequiredService<PairInteractionsHandler>();
+        _services.GetRequiredService<PairInteractionNetworkService>();
         _services.GetRequiredService<SpeakHandler>();
         _services.GetRequiredService<SyncOnlineStatusHandler>();
         _services.GetRequiredService<SyncPairStateHandler>();

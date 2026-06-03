@@ -10,7 +10,6 @@ using KinkLinkServer.Infrastructure;
 using KinkLinkServer.Managers;
 using KinkLinkServer.Services;
 using KinkLinkServer.SignalR.Handlers;
-using KinkLinkServer.SignalR.Handlers.Interactions;
 using KinkLinkServer.SignalR.Hubs;
 using MessagePack;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -132,8 +131,18 @@ public class Program
             builder.Services.AddSingleton<KinkLinkProfilesService>();
             builder.Services.AddSingleton<ProfilesSql>();
             builder.Services.AddSingleton<PermissionsService>();
+            // Shared WardrobeSql singleton — both WardrobeDataService and ActiveWardrobeStateService
+            // use it so they share one NpgsqlDataSource pool instead of creating separate ones.
+            builder.Services.AddSingleton(sp =>
+            {
+                var config = sp.GetRequiredService<Configuration>();
+                return new WardrobeSql(config.DatabaseConnectionString);
+            });
             builder.Services.AddSingleton<WardrobeDataService>();
             builder.Services.AddSingleton<LockService>();
+
+            // Active wardrobe state service (persisted per-profile active layers)
+            builder.Services.AddSingleton<IActiveWardrobeStateService, ActiveWardrobeStateService>();
 
             // Business services
             builder.Services.AddSingleton<IPresenceService, PresenceService>();
@@ -143,16 +152,7 @@ public class Program
             // Managers
             builder.Services.AddSingleton<IForwardedRequestManager, ForwardedRequestManager>();
 
-            // Interaction handlers (auto-registered)
-            builder.Services.AddSingleton<WardrobeApplyInteractionHandler>();
-            builder.Services.AddSingleton<LockWardrobeInteractionHandler>();
-            builder.Services.AddSingleton<UnlockWardrobeInteractionHandler>();
-            builder.Services.AddSingleton<RemoveWardrobeInteractionHandler>();
-            builder.Services.AddSingleton<
-                IPairInteractionHandlerFactory,
-                PairInteractionHandlerFactory
-            >();
-            // Handles
+            // Handlers
             builder.Services.AddSingleton<OnlineStatusUpdateHandler>();
             builder.Services.AddSingleton<AddFriendHandler>();
             builder.Services.AddSingleton<ChatHandler>();
@@ -228,7 +228,7 @@ public class Program
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.ASCII.GetBytes(configuration.SigningKey)
+                        Encoding.UTF8.GetBytes(configuration.SigningKey)
                     ),
                 };
             });

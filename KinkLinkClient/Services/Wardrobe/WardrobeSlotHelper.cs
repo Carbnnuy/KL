@@ -1,115 +1,96 @@
+using System;
 using KinkLinkCommon.Dependencies.Glamourer;
 using KinkLinkCommon.Dependencies.Glamourer.Components;
+using KinkLinkCommon.Domain.Wardrobe;
 
 namespace KinkLinkClient.Services;
 
 public static class WardrobeSlotHelper
 {
-    public static readonly string[] AllSlotNames =
-        ["Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RFinger", "LFinger"];
-
-    public static GlamourerEquipmentSlot GetSlotFromName(string slotName)
+    public static KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot GetSlotFromName(
+        string name
+    )
     {
-        return slotName switch
+        return name switch
         {
-            "Head" => GlamourerEquipmentSlot.Head,
-            "Body" => GlamourerEquipmentSlot.Body,
-            "Hands" => GlamourerEquipmentSlot.Hands,
-            "Legs" => GlamourerEquipmentSlot.Legs,
-            "Feet" => GlamourerEquipmentSlot.Feet,
-            "Ears" => GlamourerEquipmentSlot.Ears,
-            "Neck" => GlamourerEquipmentSlot.Neck,
-            "Wrists" => GlamourerEquipmentSlot.Wrists,
-            "RFinger" => GlamourerEquipmentSlot.RFinger,
-            "LFinger" => GlamourerEquipmentSlot.LFinger,
-            _ => GlamourerEquipmentSlot.None,
+            "Head" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Head,
+            "Body" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Body,
+            "Hands" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Hands,
+            "Legs" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Legs,
+            "Feet" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Feet,
+            "Ears" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Ears,
+            "Neck" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Neck,
+            "Wrists" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.Wrists,
+            "RFinger" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.RFinger,
+            "LFinger" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.LFinger,
+            "BaseSet" => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.None,
+            _ => KinkLinkCommon.Dependencies.Glamourer.GlamourerEquipmentSlot.None,
         };
     }
 
-    public static string GetNameFromSlot(GlamourerEquipmentSlot slot)
+    public static string GetNameFromSlot(WardrobeLayer layer)
     {
-        return slot switch
+        return layer switch
         {
-            GlamourerEquipmentSlot.Head => "Head",
-            GlamourerEquipmentSlot.Body => "Body",
-            GlamourerEquipmentSlot.Hands => "Hands",
-            GlamourerEquipmentSlot.Legs => "Legs",
-            GlamourerEquipmentSlot.Feet => "Feet",
-            GlamourerEquipmentSlot.Ears => "Ears",
-            GlamourerEquipmentSlot.Neck => "Neck",
-            GlamourerEquipmentSlot.Wrists => "Wrists",
-            GlamourerEquipmentSlot.RFinger => "RFinger",
-            GlamourerEquipmentSlot.LFinger => "LFinger",
-            _ => "None",
+            WardrobeLayer.Head => "Head",
+            WardrobeLayer.Chest => "Body",
+            WardrobeLayer.Hands => "Hands",
+            WardrobeLayer.Legs => "Legs",
+            WardrobeLayer.Feet => "Feet",
+            WardrobeLayer.Ears => "Ears",
+            WardrobeLayer.Neck => "Neck",
+            WardrobeLayer.Wrists => "Wrists",
+            WardrobeLayer.RFinger => "RFinger",
+            WardrobeLayer.LFinger => "LFinger",
+            WardrobeLayer.Outfit => "Outfit",
+            WardrobeLayer.Mods => "Mods",
+            _ => layer.ToString(),
         };
     }
 
-    public static void SetEquipmentSlot(
-        GlamourerEquipment equipment,
-        GlamourerEquipmentSlot slot,
-        GlamourerItem item
-    )
+    public static WardrobeLayer GetLayerFromName(string name)
     {
-        switch (slot)
+        return name switch
         {
-            case GlamourerEquipmentSlot.Head:
-                equipment.Head = item;
-                break;
-            case GlamourerEquipmentSlot.Body:
-                equipment.Body = item;
-                break;
-            case GlamourerEquipmentSlot.Hands:
-                equipment.Hands = item;
-                break;
-            case GlamourerEquipmentSlot.Legs:
-                equipment.Legs = item;
-                break;
-            case GlamourerEquipmentSlot.Feet:
-                equipment.Feet = item;
-                break;
-            case GlamourerEquipmentSlot.Ears:
-                equipment.Ears = item;
-                break;
-            case GlamourerEquipmentSlot.Neck:
-                equipment.Neck = item;
-                break;
-            case GlamourerEquipmentSlot.Wrists:
-                equipment.Wrists = item;
-                break;
-            case GlamourerEquipmentSlot.RFinger:
-                equipment.RFinger = item;
-                break;
-            case GlamourerEquipmentSlot.LFinger:
-                equipment.LFinger = item;
-                break;
-        }
+            "Head" => WardrobeLayer.Head,
+            "Body" => WardrobeLayer.Chest,
+            "Hands" => WardrobeLayer.Hands,
+            "Legs" => WardrobeLayer.Legs,
+            "Feet" => WardrobeLayer.Feet,
+            "Ears" => WardrobeLayer.Ears,
+            "Neck" => WardrobeLayer.Neck,
+            "Wrists" => WardrobeLayer.Wrists,
+            "RFinger" => WardrobeLayer.RFinger,
+            "LFinger" => WardrobeLayer.LFinger,
+            "BaseSet" => WardrobeLayer.Outfit,
+            "Outfit" => WardrobeLayer.Outfit,
+            "Mods" => WardrobeLayer.Mods,
+            _ => WardrobeLayer.Outfit,
+        };
     }
 
-    public static bool EquippedItemsChanged(
-        GlamourerEquipment activeset,
-        GlamourerEquipment newState
-    )
+    /// <summary>
+    ///     Returns true if any equipment slot changed between the two states.
+    /// </summary>
+    public static bool EquippedItemsChanged(GlamourerEquipment before, GlamourerEquipment after)
     {
-        if (activeset.Head.Apply && activeset.Head.IsEqualTo(newState.Head) is false)
-            return true;
-        if (activeset.Body.Apply && activeset.Body.IsEqualTo(newState.Body) is false)
-            return true;
-        if (activeset.Hands.Apply && activeset.Hands.IsEqualTo(newState.Hands) is false)
-            return true;
-        if (activeset.Legs.Apply && activeset.Legs.IsEqualTo(newState.Legs) is false)
-            return true;
-        if (activeset.Feet.Apply && activeset.Feet.IsEqualTo(newState.Feet) is false)
-            return true;
-        if (activeset.Ears.Apply && activeset.Ears.IsEqualTo(newState.Ears) is false)
-            return true;
-        if (activeset.Neck.Apply && activeset.Neck.IsEqualTo(newState.Neck) is false)
-            return true;
-        if (activeset.Wrists.Apply && activeset.Wrists.IsEqualTo(newState.Wrists) is false)
-            return true;
-        if (activeset.RFinger.Apply && activeset.RFinger.IsEqualTo(newState.RFinger) is false)
-            return true;
-        if (activeset.LFinger.Apply && activeset.LFinger.IsEqualTo(newState.LFinger) is false)
-            return true;
+        if (!before.MainHand.IsEqualTo(after.MainHand)) return true;
+        if (!before.OffHand.IsEqualTo(after.OffHand)) return true;
+        if (!before.Head.IsEqualTo(after.Head)) return true;
+        if (!before.Body.IsEqualTo(after.Body)) return true;
+        if (!before.Hands.IsEqualTo(after.Hands)) return true;
+        if (!before.Legs.IsEqualTo(after.Legs)) return true;
+        if (!before.Feet.IsEqualTo(after.Feet)) return true;
+        if (!before.Ears.IsEqualTo(after.Ears)) return true;
+        if (!before.Neck.IsEqualTo(after.Neck)) return true;
+        if (!before.Wrists.IsEqualTo(after.Wrists)) return true;
+        if (!before.RFinger.IsEqualTo(after.RFinger)) return true;
+        if (!before.LFinger.IsEqualTo(after.LFinger)) return true;
+        if (!before.Hat.IsEqualTo(after.Hat)) return true;
+        if (!before.VieraEars.IsEqualTo(after.VieraEars)) return true;
+        if (!before.Weapon.IsEqualTo(after.Weapon)) return true;
+        if (!before.Visor.IsEqualTo(after.Visor)) return true;
         return false;
     }
 }
+

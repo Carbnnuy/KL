@@ -4,32 +4,37 @@ using KinkLinkServer.Domain.Interfaces;
 using KinkLinkServer.Services;
 using KinkLinkServer.SignalR.Handlers;
 using KinkLinkServer.SignalR.Hubs;
+using KinkLinkServerTests.Database;
+using KinkLinkServerTests.TestInfrastructure;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace KinkLinkServerTests.ServiceTests.WatcherTests;
 
-public class WatcherTestBase
+public class WatcherTestBase : DatabaseServiceTestBase
 {
     protected readonly Configuration Config;
     protected readonly ILoggerFactory LogFactory;
     protected readonly Mock<IHubContext<PrimaryHub>> HubContextMock;
     protected readonly Mock<IHubClients> HubClientsMock;
     protected readonly Dictionary<string, Mock<ISingleClientProxy>> ClientProxyMocks = new();
-    protected readonly Mock<IPresenceService> PresenceMock;
-    protected readonly KinkLinkProfilesService ProfilesService;
+    protected readonly PresenceService PresenceService;
+    protected readonly LockService LockService;
+    protected readonly LocksHandler LocksHandler;
+    protected readonly ActiveWardrobeStateService ActiveWardrobeService;
     protected readonly MetricsService Metrics;
 
-    protected WatcherTestBase()
+    protected WatcherTestBase(TestDatabaseFixture fixture)
+        : base(fixture)
     {
         Config = new Configuration(
-            "Host=localhost;Database=nonexistent",
+            Fixture.ConnectionString,
             "test_signing_key_that_is_long_enough_for_hs256",
             "http://localhost:5006"
         );
 
-        LogFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => { });
+        LogFactory = LoggerFactory.Create(builder => { });
         Metrics = new MetricsService();
 
         HubClientsMock = new Mock<IHubClients>(MockBehavior.Strict);
@@ -42,10 +47,17 @@ public class WatcherTestBase
             .Setup(h => h.Clients)
             .Returns(HubClientsMock.Object);
 
-        PresenceMock = new Mock<IPresenceService>(MockBehavior.Strict);
+        PresenceService = new PresenceService(LogFactory.CreateLogger<PresenceService>());
 
-        var profilesLogger = LogFactory.CreateLogger<KinkLinkProfilesService>();
-        ProfilesService = new KinkLinkProfilesService(Config, Metrics, profilesLogger);
+        var lockLogger = LogFactory.CreateLogger<LockService>();
+        LockService = new LockService(Config, lockLogger);
+
+        LocksHandler = new LocksHandler(LockService, PermissionsService, Config,
+            LogFactory.CreateLogger<LocksHandler>());
+
+        var sharedWardrobeSql = new WardrobeSql(Config.DatabaseConnectionString);
+        ActiveWardrobeService = new ActiveWardrobeStateService(sharedWardrobeSql,
+            LogFactory.CreateLogger<ActiveWardrobeStateService>(), Metrics, LockService);
     }
 
     private Mock<ISingleClientProxy> GetOrCreateClientProxy(string connectionId)
@@ -69,40 +81,4 @@ public class WatcherTestBase
 
     protected Presence CreatePresence(string connectionId = "test-conn-id")
         => new(connectionId, "TestCharacter", "TestWorld");
-
-    protected Mock<LockService> CreateLockServiceMock()
-        => new(Config, LogFactory.CreateLogger<LockService>());
-
-    protected Mock<PairsService> CreatePairsServiceMock()
-        => new(Config, LogFactory.CreateLogger<PairsService>(), Metrics);
-
-    protected Mock<KinkLinkProfilesService> CreateProfilesServiceMock()
-        => new(Config, Metrics, LogFactory.CreateLogger<KinkLinkProfilesService>());
-
-    protected Mock<PermissionsService> CreatePermissionsServiceMock()
-    {
-        var pairsMock = CreatePairsServiceMock();
-        var profilesMock = CreateProfilesServiceMock();
-        return new(Config, LogFactory.CreateLogger<PermissionsService>(),
-            pairsMock.Object, profilesMock.Object);
-    }
-
-    protected Mock<WardrobeDataService> CreateWardrobeDataServiceMock()
-    {
-        var lockServiceMock = CreateLockServiceMock();
-        return new(Config, LogFactory.CreateLogger<WardrobeDataService>(),
-            Metrics, lockServiceMock.Object);
-    }
-
-    protected Mock<LocksHandler> CreateLocksHandlerMock(
-        Mock<LockService>? lockServiceMock = null,
-        Mock<PermissionsService>? permissionsMock = null,
-        Mock<WardrobeDataService>? wardrobeDataMock = null)
-    {
-        lockServiceMock ??= CreateLockServiceMock();
-        permissionsMock ??= CreatePermissionsServiceMock();
-        wardrobeDataMock ??= CreateWardrobeDataServiceMock();
-        return new(lockServiceMock.Object, permissionsMock.Object,
-            Config, LogFactory.CreateLogger<LocksHandler>());
-    }
 }
