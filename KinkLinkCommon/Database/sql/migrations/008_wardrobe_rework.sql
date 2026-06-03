@@ -1,7 +1,7 @@
 -- Drop active_wardrobe_state
 -- Note: older schema used 'activewardrobe' (no underscore). DROP targets that name intentionally for backward cleanup.
 DROP TRIGGER IF EXISTS activewardrobe_changes_trigger ON activewardrobe;
-DROP TABLE IF EXISTS activewardrobe;
+DROP TABLE IF EXISTS activewardrobe CASCADE;
 
 -- Recreate it with appropriate columns
 CREATE TABLE IF NOT EXISTS active_wardrobe (
@@ -16,9 +16,10 @@ CREATE TABLE IF NOT EXISTS active_wardrobe (
 DELETE FROM wardrobe WHERE type IS NOT NULL AND type <> 'set';
 
 ALTER TABLE wardrobe DROP CONSTRAINT IF EXISTS valid_type;
--- Drop column 'type' from wardrobe (no longer needed)
-ALTER TABLE wardrobe DROP COLUMN IF EXISTS type;
-ALTER TABLE wardrobe DROP COLUMN IF EXISTS slot;
+-- Drop columns 'type' and 'slot' from wardrobe (no longer needed) CASCADE ensures that 
+-- it drops dependent tables that may not be part of the schema such a debug views
+ALTER TABLE wardrobe DROP COLUMN IF EXISTS type CASCADE;
+ALTER TABLE wardrobe DROP COLUMN IF EXISTS slot CASCADE;
 
 -- Create column 'layer' on wardrobe and default to 0
 ALTER TABLE wardrobe ADD COLUMN IF NOT EXISTS layer INTEGER NOT NULL DEFAULT 0;
