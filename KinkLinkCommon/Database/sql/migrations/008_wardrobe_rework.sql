@@ -1,5 +1,6 @@
 -- Drop active_wardrobe_state
 -- Note: older schema used 'activewardrobe' (no underscore). DROP targets that name intentionally for backward cleanup.
+DROP TRIGGER IF EXISTS activewardrobe_changes_trigger ON activewardrobe;
 DROP TABLE IF EXISTS activewardrobe;
 
 -- Recreate it with appropriate columns
@@ -40,5 +41,3 @@ CREATE TRIGGER active_wardrobe_changes_trigger
   AFTER INSERT OR UPDATE OR DELETE ON active_wardrobe
   FOR EACH ROW EXECUTE FUNCTION notify_active_wardrobe_changed();
 
--- Remove old triggers if present on legacy or new table names. Do not recreate triggers here.
-DROP TRIGGER IF EXISTS activewardrobe_changes_trigger ON activewardrobe;
