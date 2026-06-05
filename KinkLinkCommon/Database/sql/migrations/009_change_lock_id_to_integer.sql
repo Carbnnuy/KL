@@ -2,7 +2,7 @@
 -- The Locks table primary key constraint will be recreated after the column type change
 
 -- Drop the primary key constraint (PostgreSQL auto-names it locks_pkey)
-ALTER TABLE Locks DROP CONSTRAINT locks_pkey;
+ALTER TABLE Locks DROP CONSTRAINT IF EXISTS locks_pkey;
 
 -- Drop indexes referencing lock_id (they will be recreated)
 DROP INDEX IF EXISTS idx_locks_lockee_id;
