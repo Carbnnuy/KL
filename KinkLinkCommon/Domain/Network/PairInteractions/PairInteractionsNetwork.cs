@@ -1,4 +1,5 @@
 using KinkLinkCommon.Dependencies.Moodles.Domain;
+using KinkLinkCommon.Domain;
 using KinkLinkCommon.Domain.CharacterState;
 using KinkLinkCommon.Domain.Enums.Permissions;
 using KinkLinkCommon.Domain.Network.SyncPairState;
@@ -37,3 +38,29 @@ public record QueryPairWardrobeResponse(string TargetFriendCode, List<LightWardr
     public QueryPairWardrobeResponse()
         : this("", []) { }
 }
+
+[MessagePackObject(keyAsPropertyName: true)]
+public record ApplyWardrobeRequest(
+    string TargetFriendCode,
+    WardrobeLayer Layer,
+    Guid? Id
+);
+
+[MessagePackObject(keyAsPropertyName: true)]
+public record RemoveWardrobeRequest(
+    string TargetFriendCode,
+    WardrobeLayer Layer
+);
+
+[MessagePackObject(keyAsPropertyName: true)]
+public record PairApplyLockRequest(
+    string TargetFriendCode,
+    LockInfoDto LockInfo
+);
+
+[MessagePackObject(keyAsPropertyName: true)]
+public record PairRemoveLockRequest(
+    string TargetFriendCode,
+    LockKind LockId,
+    string? Password
+);

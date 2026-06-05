@@ -9,6 +9,7 @@ using KinkLinkClient.Dependencies.Penumbra.Services;
 using KinkLinkClient.Utils;
 using KinkLinkCommon.Dependencies.Glamourer;
 using KinkLinkCommon.Dependencies.Glamourer.Components;
+using KinkLinkCommon.Domain;
 using KinkLinkCommon.Domain.Enums;
 using KinkLinkCommon.Domain.Network.Wardrobe;
 using KinkLinkCommon.Domain.Wardrobe;
@@ -138,6 +139,20 @@ public partial class WardrobeManager
         );
         try
         {
+            var lockId = LockKindExtensions.From(layer);
+            if (_lockService.IsLocked(lockId))
+            {
+                Plugin.Log.Warning(
+                    "Cannot apply to slot {Slot}: slot is locked. Unlock first.",
+                    layer
+                );
+                NotificationHelper.Warning(
+                    "Slot Locked",
+                    $"Cannot apply to {layer}: the slot is locked. Unlock it first."
+                );
+                return;
+            }
+
             if (!_wardrobeLibrary.TryGetValue(itemId, out var item))
             {
                 Plugin.Log.Warning("Wardrobe item not found locally: {Id}", itemId);
@@ -228,8 +243,12 @@ public partial class WardrobeManager
             if (currentLock != null && !currentLock.Value.CanSelfUnlock)
             {
                 Plugin.Log.Warning(
-                    "Cannot remove piece from slot {Slot}: slot is locked by another user",
+                    "Cannot remove piece from slot {Slot}: slot is locked by another user.",
                     layer
+                );
+                NotificationHelper.Warning(
+                    "Slot Locked",
+                    $"Cannot remove from {layer}: the slot is locked by another user. Unlock it first."
                 );
                 return;
             }
@@ -359,7 +378,6 @@ public partial class WardrobeManager
             }
             else
             {
-                // Success - ActiveWardrobeWatcher will push the new state; notify the user
                 NotificationHelper.Success(
                     "Randomize Wardrobe",
                     "Requested randomization. Applying new outfit shortly."
@@ -389,9 +407,9 @@ public partial class WardrobeManager
         await _wardrobeNetworkService.SetActiveWardrobeLayerAsync(layer, _wardrobeLibrary[item]);
     }
 
-    private string GetWardrobeLockId(WardrobeLayer layer)
+    private LockKind GetWardrobeLockId(WardrobeLayer layer)
     {
-        return $"wardrobe-{layer.ToString().ToLowerInvariant()}";
+        return LockKindExtensions.From(layer);
     }
 
     private async Task SyncActiveSetToServerAsync()

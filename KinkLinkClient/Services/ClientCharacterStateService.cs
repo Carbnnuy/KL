@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using KinkLinkCommon.Domain;
 using KinkLinkCommon.Domain.Enums;
 using KinkLinkCommon.Domain.Network;
+using KinkLinkCommon.Domain.Network.Locks;
 using KinkLinkCommon.Domain.Network.PairInteractions;
 using KinkLinkCommon.Domain.Network.SyncPairState;
 using KinkLinkCommon.Domain.Wardrobe;
@@ -99,28 +100,14 @@ public class ClientCharacterStateService : IDisposable
         }
     }
 
-    public async Task<ActionResultEc> LockPairLayer(
-        string targetFriendCode,
-        WardrobeLayer layer,
-        LockInfoDto lockInfo
-    )
+    public async Task<ActionResultEc> LockPairLayer(string targetFriendCode, LockInfoDto lockInfo)
     {
         try
         {
-            var dto = new LightWardrobeItemDto(
-                Guid.Empty,
-                string.Empty,
-                string.Empty,
-                layer,
-                RelationshipPriority.Casual,
-                lockInfo
-            );
+            var request = new PairApplyLockRequest(targetFriendCode, lockInfo);
 
             var response = await _network
-                .InvokeAsync<ActionResultEc>(
-                    HubMethod.InteractionApplyWardrobe,
-                    new object[] { targetFriendCode, dto }
-                )
+                .InvokeAsync<ActionResultEc>(HubMethod.InteractionApplyLock, request)
                 .ConfigureAwait(false);
 
             return response;
@@ -134,25 +121,16 @@ public class ClientCharacterStateService : IDisposable
 
     public async Task<ActionResultEc> UnlockPairLock(
         string targetFriendCode,
-        string lockId,
+        LockKind lockId,
         string? password
     )
     {
         try
         {
-            // TODO: Implement this flow as follows
-            // var lockInfo = get current lock for the wardrobe id.
-            // Check if able to unlock based on permissions
+            var request = new PairRemoveLockRequest(targetFriendCode, lockId, password);
+
             var response = await _network
-                .InvokeAsync<ActionResultEc>(
-                    HubMethod.InteractionRemoveLock,
-                    new
-                    {
-                        targetFriendCode,
-                        lockId,
-                        password,
-                    }
-                )
+                .InvokeAsync<ActionResultEc>(HubMethod.InteractionRemoveLock, request)
                 .ConfigureAwait(false);
 
             return response;
@@ -172,20 +150,10 @@ public class ClientCharacterStateService : IDisposable
     {
         try
         {
-            var dto = new LightWardrobeItemDto(
-                wardrobeId,
-                string.Empty,
-                string.Empty,
-                layer,
-                RelationshipPriority.Casual,
-                null
-            );
+            var request = new ApplyWardrobeRequest(targetFriendCode, layer, wardrobeId);
 
             var response = await _network
-                .InvokeAsync<ActionResultEc>(
-                    HubMethod.InteractionApplyWardrobe,
-                    new object[] { targetFriendCode, dto }
-                )
+                .InvokeAsync<ActionResultEc>(HubMethod.InteractionApplyWardrobe, request)
                 .ConfigureAwait(false);
 
             return response;
@@ -208,11 +176,10 @@ public class ClientCharacterStateService : IDisposable
     {
         try
         {
+            var request = new RemoveWardrobeRequest(targetFriendCode, layer);
+
             var response = await _network
-                .InvokeAsync<ActionResultEc>(
-                    HubMethod.InteractionRemoveWardrobe,
-                    new object[] { targetFriendCode, layer }
-                )
+                .InvokeAsync<ActionResultEc>(HubMethod.InteractionRemoveWardrobe, request)
                 .ConfigureAwait(false);
 
             return response;
@@ -225,6 +192,43 @@ public class ClientCharacterStateService : IDisposable
                 targetFriendCode
             );
             return ActionResultEc.Unknown;
+        }
+    }
+
+    public async Task<ActionResult<AddLockResponse>> AddSelfLockAsync(LockInfoDto lockInfo)
+    {
+        try
+        {
+            var request = new AddLockRequest(lockInfo);
+            var response = await _network
+                .InvokeAsync<ActionResult<AddLockResponse>>(HubMethod.AddLock, request)
+                .ConfigureAwait(false);
+            return response ?? new ActionResult<AddLockResponse>(ActionResultEc.Unknown, null);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "Failed to add self lock");
+            return new ActionResult<AddLockResponse>(ActionResultEc.Unknown, null);
+        }
+    }
+
+    public async Task<ActionResult<RemoveLockResponse>> RemoveSelfLockAsync(
+        LockKind lockId,
+        string lockeeUid
+    )
+    {
+        try
+        {
+            var request = new RemoveLockRequest(lockId, lockeeUid);
+            var response = await _network
+                .InvokeAsync<ActionResult<RemoveLockResponse>>(HubMethod.RemoveLock, request)
+                .ConfigureAwait(false);
+            return response ?? new ActionResult<RemoveLockResponse>(ActionResultEc.Unknown, null);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "Failed to remove self lock");
+            return new ActionResult<RemoveLockResponse>(ActionResultEc.Unknown, null);
         }
     }
 

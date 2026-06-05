@@ -722,9 +722,9 @@ public class CommonSerializationTests
     {
         var lockInfo = new LockInfoDto
         {
-            LockID = "lock-test-1",
-            LockeeID = 100,
-            LockerID = 200,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = "100",
+            LockerID = "200",
             LockPriority = RelationshipPriority.Devotional,
             CanSelfUnlock = true,
             Expires = DateTime.UtcNow,
@@ -746,9 +746,9 @@ public class CommonSerializationTests
     {
         var lockInfo = new LockInfoDto
         {
-            LockID = "lock-response-1",
-            LockeeID = 101,
-            LockerID = 201,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = "101",
+            LockerID = "201",
             LockPriority = RelationshipPriority.Serious,
             CanSelfUnlock = false,
             Expires = null,
@@ -764,7 +764,7 @@ public class CommonSerializationTests
     [Fact]
     public void RemoveLockRequest_RoundTrip_PreservesFields()
     {
-        var original = new RemoveLockRequest("lock-abc", "uid-xyz");
+        var original = new RemoveLockRequest(LockKind.WardrobeHead, "uid-xyz");
         var data = Serialize(original);
         var deserialized = Deserialize<RemoveLockRequest>(data);
         Assert.Equal(original.LockId, deserialized.LockId);
@@ -787,17 +787,17 @@ public class CommonSerializationTests
         {
             new()
             {
-                LockID = "lock-1",
-                LockeeID = 1,
-                LockerID = 2,
+                LockID = LockKind.WardrobeHead,
+                LockeeID = "1",
+                LockerID = "2",
                 LockPriority = RelationshipPriority.Casual,
                 CanSelfUnlock = true,
             },
             new()
             {
-                LockID = "lock-2",
-                LockeeID = 3,
-                LockerID = 4,
+                LockID = LockKind.WardrobeChest,
+                LockeeID = "3",
+                LockerID = "4",
                 LockPriority = RelationshipPriority.Devotional,
                 CanSelfUnlock = false,
                 Password = "pw",

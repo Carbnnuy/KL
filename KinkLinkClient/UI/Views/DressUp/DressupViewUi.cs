@@ -3,9 +3,11 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using KinkLinkClient.Domain.Interfaces;
 using KinkLinkClient.Services;
+using KinkLinkClient.Style;
 using KinkLinkClient.Utils;
 using KinkLinkCommon.Domain.Wardrobe;
 
@@ -49,7 +51,7 @@ public partial class DressupViewUi(DressupViewUiController controller) : IDrawab
             true,
             () =>
             {
-                if (ImGui.BeginChild("##PersonalSlotList", new Vector2(0, 0), true))
+                if (ImGui.BeginChild("##PersonalSlotList", new Vector2(0, 0), false))
                 {
                     if (
                         ImGui.BeginTable(
@@ -59,10 +61,10 @@ public partial class DressupViewUi(DressupViewUiController controller) : IDrawab
                         )
                     )
                     {
-                        ImGui.TableSetupColumn("Slot", ImGuiTableColumnFlags.WidthFixed, 120);
+                        ImGui.TableSetupColumn("Slot", ImGuiTableColumnFlags.WidthFixed, 85);
                         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 100);
-                        ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 90);
+                        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 36);
+                        ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 36);
                         ImGui.TableHeadersRow();
 
                         foreach (var status in statuses)
@@ -89,8 +91,9 @@ public partial class DressupViewUi(DressupViewUiController controller) : IDrawab
                             var pendingId = controller.GetSelectedForLayer(layer);
                             if (pendingId.HasValue)
                             {
-                                var pending = controller
-                                    .WardrobeManager.GetItemById(pendingId.Value);
+                                var pending = controller.WardrobeManager.GetItemById(
+                                    pendingId.Value
+                                );
                                 preview = pending?.Name;
                             }
                             if (string.IsNullOrEmpty(preview) && status.HasItem)
@@ -126,70 +129,91 @@ public partial class DressupViewUi(DressupViewUiController controller) : IDrawab
 
                             ImGui.TableNextColumn();
                             var isLocked = controller.IsSlotLocked(layer);
-                            var canRemove = !isLocked || controller.CanRemoveFromSlot(layer);
 
                             if (controller.WardrobeManager.IsLayerActive(layer))
                             {
-                                if (canRemove)
-                                {
-                                    if (
-                                        ImGui.Button(
-                                            $"Remove##personal_{status.SlotName}",
-                                            new Vector2(80, 24)
-                                        )
+                                var canRemove = controller.CanRemoveFromSlot(layer);
+                                ImGui.BeginDisabled(!canRemove);
+                                if (
+                                    SharedUserInterfaces.IconButton(
+                                        FontAwesomeIcon.Reply,
+                                        KinkLinkDimensions.IconButton,
+                                        "Remove",
+                                        $"personal_remove_{status.SlotName}"
                                     )
-                                    {
-                                        _ = RemoveSlotAsync(layer);
-                                    }
-                                }
-                                else
+                                )
                                 {
-                                    ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-                                    ImGui.Button(
-                                        $"Remove##personal_{status.SlotName}",
-                                        new Vector2(80, 24)
-                                    );
-                                    ImGui.PopStyleVar();
+                                    _ = RemoveSlotAsync(layer);
                                 }
+                                ImGui.EndDisabled();
                             }
                             else
                             {
                                 var selectedId = controller.GetSelectedForLayer(layer);
                                 var canApply = selectedId.HasValue;
-                                ImGui.PushStyleVar(ImGuiStyleVar.Alpha, canApply ? 1.0f : 0.5f);
+                                ImGui.BeginDisabled(!canApply);
                                 if (
-                                    ImGui.Button(
-                                        $"Apply##personal_{status.SlotName}",
-                                        new Vector2(80, 24)
+                                    SharedUserInterfaces.IconButton(
+                                        FontAwesomeIcon.Tshirt,
+                                        KinkLinkDimensions.IconButton,
+                                        "Apply",
+                                        $"personal_apply_{status.SlotName}"
                                     )
                                 )
                                 {
-                                    if (canApply)
-                                    {
-                                        _ = controller.ApplyItemToLayerAsync(
-                                            layer,
-                                            selectedId.Value
-                                        );
-                                    }
+                                    _ = controller.ApplyItemToLayerAsync(layer, selectedId!.Value);
                                 }
-                                ImGui.PopStyleVar();
+                                ImGui.EndDisabled();
                             }
 
                             ImGui.TableNextColumn();
                             if (isLocked)
                             {
-                                var lockInfo = controller.GetSlotLock(layer);
-                                ImGui.TextColored(ImGuiColors.ParsedOrange, "Locked");
-                                if (ImGui.IsItemHovered())
+                                var slotLock = controller.GetSlotLock(layer);
+                                if (controller.CanUnlockSlot(layer))
                                 {
-                                    var priorityText =
-                                        lockInfo?.LockPriority.ToString() ?? "Unknown";
-                                    SharedUserInterfaces.Tooltip($"Locked ({priorityText})");
+                                    if (
+                                        SharedUserInterfaces.IconButton(
+                                            FontAwesomeIcon.Lock,
+                                            KinkLinkDimensions.IconButton,
+                                            "Unlock",
+                                            $"personal_unlock_{status.SlotName}"
+                                        )
+                                    )
+                                    {
+                                        _ = UnlockSlotAsync(layer);
+                                    }
+                                }
+                                else
+                                {
+                                    ImGui.BeginDisabled(true);
+                                    SharedUserInterfaces.IconButton(
+                                        FontAwesomeIcon.Lock,
+                                        KinkLinkDimensions.IconButton,
+                                        $"Locked ({slotLock?.LockPriority.ToString() ?? "?"})",
+                                        $"personal_locked_{status.SlotName}"
+                                    );
+                                    ImGui.EndDisabled();
                                 }
                             }
                             else
                             {
-                                ImGui.Text("Open");
+                                bool hasSomethingInSlot = controller
+                                    .GetSelectedForLayer(layer)
+                                    .HasValue;
+                                ImGui.BeginDisabled(!hasSomethingInSlot);
+                                if (
+                                    SharedUserInterfaces.IconButton(
+                                        FontAwesomeIcon.LockOpen,
+                                        KinkLinkDimensions.IconButton,
+                                        "Lock this slot",
+                                        $"personal_lock_{status.SlotName}"
+                                    )
+                                )
+                                {
+                                    _ = LockSlotAsync(layer);
+                                }
+                                ImGui.EndDisabled();
                             }
                         }
 
@@ -218,11 +242,27 @@ public partial class DressupViewUi(DressupViewUiController controller) : IDrawab
 
     private async Task LockSlotAsync(WardrobeLayer layer)
     {
-        // TODO: Reimplement with new lock assumptions
+        try
+        {
+            await controller.LockSlotAsync(layer);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "Failed to lock slot");
+            NotificationHelper.Error("Error", "Failed to lock slot.");
+        }
     }
 
     private async Task UnlockSlotAsync(WardrobeLayer layer)
     {
-        // TODO:: Reimplement with new lock assumptions
+        try
+        {
+            await controller.UnlockSlotAsync(layer);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "Failed to unlock slot");
+            NotificationHelper.Error("Error", "Failed to unlock slot.");
+        }
     }
 }

@@ -59,9 +59,7 @@ public class LocksHandler(
             lockInfo.LockID
         );
 
-        var lockeeProfile = await _profilesSql.GetProfileByUidAsync(
-            new(lockInfo.LockeeID.ToString())
-        );
+        var lockeeProfile = await _profilesSql.GetProfileByUidAsync(new(lockInfo.LockeeID));
         if (lockeeProfile == null)
         {
             logger.LogWarning(
@@ -72,78 +70,85 @@ public class LocksHandler(
         }
 
         var lockeeFriendCode = lockeeProfile.Value.Uid;
+        bool isSelfLock = senderFriendCode == lockeeFriendCode;
 
-        var permissions = await permissionsService.GetPermissions(
-            senderFriendCode,
-            lockeeFriendCode
-        );
-        if (permissions == null)
+        RelationshipPriority lockPriority;
+        if (!isSelfLock)
         {
-            logger.LogWarning(
-                "[LocksHandler] No permissions between {Sender} and {Lockee}",
+            var permissions = await permissionsService.GetPermissions(
                 senderFriendCode,
                 lockeeFriendCode
             );
-            return ActionResultBuilder.Fail(ActionResultEc.TargetNotFriends);
-        }
-
-        var grantedBy = permissions.PermissionsGrantedBy;
-        if (grantedBy == null)
-        {
-            logger.LogWarning(
-                "[LocksHandler] Lockee {Lockee} has not granted permissions to {Sender}",
-                lockeeFriendCode,
-                senderFriendCode
-            );
-            return ActionResultBuilder.Fail(ActionResultEc.TargetHasNotGrantedSenderPermissions);
-        }
-
-        var lockType = GetLockType(lockInfo.LockID);
-        var requiredPerm = GetRequiredPermissionForLock(lockType);
-        if (requiredPerm != InteractionPerms.None && !grantedBy.Perms.HasFlag(requiredPerm))
-        {
-            logger.LogWarning(
-                "[LocksHandler] Sender {Sender} lacks required permission {Perm} for lock type {Type}",
-                senderFriendCode,
-                requiredPerm,
-                lockType
-            );
-            return ActionResultBuilder.Fail(ActionResultEc.TargetHasNotGrantedSenderPermissions);
-        }
-
-        var existingLock = await lockService.GetLockAsync(lockInfo.LockID, lockeeFriendCode);
-        if (existingLock != null)
-        {
-            var senderPriority = permissions.PermissionsGrantedTo.Priority;
-            if (senderPriority <= existingLock.Value.LockPriority)
+            if (permissions == null)
             {
                 logger.LogWarning(
-                    "[LocksHandler] Insufficient priority to override lock. Sender={Priority}, Existing={Priority}",
-                    senderPriority,
-                    existingLock.Value.LockPriority
+                    "[LocksHandler] No permissions between {Sender} and {Lockee}",
+                    senderFriendCode,
+                    lockeeFriendCode
                 );
-                return ActionResultBuilder.Fail(ActionResultEc.LockInsufficientPriority);
+                return ActionResultBuilder.Fail(ActionResultEc.TargetNotFriends);
             }
 
-            logger.LogInformation(
-                "[LocksHandler] Overwriting existing lock {LockId} with higher priority",
-                lockInfo.LockID
-            );
-        }
+            var grantedBy = permissions.PermissionsGrantedBy;
+            if (grantedBy == null)
+            {
+                logger.LogWarning(
+                    "[LocksHandler] Lockee {Lockee} has not granted permissions to {Sender}",
+                    lockeeFriendCode,
+                    senderFriendCode
+                );
+                return ActionResultBuilder.Fail(ActionResultEc.TargetHasNotGrantedSenderPermissions);
+            }
 
-        var senderProfile = await _profilesSql.GetProfileByUidAsync(new(senderFriendCode));
-        if (senderProfile == null)
+            var requiredPerm = GetRequiredPermissionForLock(lockInfo.LockID);
+            if (requiredPerm != InteractionPerms.None && !grantedBy.Perms.HasFlag(requiredPerm))
+            {
+                logger.LogWarning(
+                    "[LocksHandler] Sender {Sender} lacks required permission {Perm} for lock type {Type}",
+                    senderFriendCode,
+                    requiredPerm,
+                    lockInfo.LockID
+                );
+                return ActionResultBuilder.Fail(ActionResultEc.TargetHasNotGrantedSenderPermissions);
+            }
+
+            var existingLock = await lockService.GetLockAsync(lockInfo.LockID, lockeeFriendCode);
+            if (existingLock != null)
+            {
+                var senderPriority = permissions.PermissionsGrantedTo.Priority;
+                if (senderPriority <= existingLock.Value.LockPriority)
+                {
+                    logger.LogWarning(
+                        "[LocksHandler] Insufficient priority to override lock. Sender={Priority}, Existing={Priority}",
+                        senderPriority,
+                        existingLock.Value.LockPriority
+                    );
+                    return ActionResultBuilder.Fail(ActionResultEc.LockInsufficientPriority);
+                }
+
+                logger.LogInformation(
+                    "[LocksHandler] Overwriting existing lock {LockId} with higher priority",
+                    lockInfo.LockID
+                );
+            }
+
+            lockPriority = permissions.PermissionsGrantedTo.Priority;
+        }
+        else
         {
-            logger.LogError("[LocksHandler] Sender profile not found: {Sender}", senderFriendCode);
-            return ActionResultBuilder.Fail(ActionResultEc.Unknown);
+            logger.LogInformation(
+                "[LocksHandler] Self-lock: Sender is same as Lockee, bypassing permission check"
+            );
+            // Self-locks use Devotional priority so they can always be overridden by pairs
+            lockPriority = RelationshipPriority.Devotional;
         }
 
         var lockToStore = new LockInfoDto
         {
             LockID = lockInfo.LockID,
-            LockeeID = lockInfo.LockeeID,
-            LockerID = senderProfile.Value.Id,
-            LockPriority = permissions.PermissionsGrantedTo.Priority,
+            LockeeID = lockeeFriendCode,
+            LockerID = senderFriendCode,
+            LockPriority = lockPriority,
             CanSelfUnlock = lockInfo.CanSelfUnlock,
             Expires = lockInfo.Expires,
             Password = lockInfo.Password,
@@ -167,7 +172,7 @@ public class LocksHandler(
         string LockerFriendCode
     )> HandleRemoveLockAsync(
         string senderFriendCode,
-        string lockId,
+        LockKind lockId,
         string lockeeUid,
         string? password
     )
@@ -179,34 +184,49 @@ public class LocksHandler(
             lockId
         );
 
-        var permissions = await permissionsService.GetPermissions(senderFriendCode, lockeeUid);
-        if (permissions == null)
-        {
-            logger.LogWarning(
-                "[LocksHandler] No permissions between {Sender} and {Lockee}",
-                senderFriendCode,
-                lockeeUid
-            );
-            return (
-                ActionResultBuilder.Fail<bool>(ActionResultEc.TargetNotFriends),
-                string.Empty,
-                string.Empty
-            );
-        }
+        bool isSelfLock = senderFriendCode == lockeeUid;
 
-        var grantedBy = permissions.PermissionsGrantedBy;
-        if (grantedBy == null)
+        RelationshipPriority userPriority;
+        if (!isSelfLock)
         {
-            logger.LogWarning(
-                "[LocksHandler] Lockee {Lockee} has not granted permissions to {Sender}",
-                lockeeUid,
-                senderFriendCode
+            var permissions = await permissionsService.GetPermissions(senderFriendCode, lockeeUid);
+            if (permissions == null)
+            {
+                logger.LogWarning(
+                    "[LocksHandler] No permissions between {Sender} and {Lockee}",
+                    senderFriendCode,
+                    lockeeUid
+                );
+                return (
+                    ActionResultBuilder.Fail<bool>(ActionResultEc.TargetNotFriends),
+                    string.Empty,
+                    string.Empty
+                );
+            }
+
+            var grantedBy = permissions.PermissionsGrantedBy;
+            if (grantedBy == null)
+            {
+                logger.LogWarning(
+                    "[LocksHandler] Lockee {Lockee} has not granted permissions to {Sender}",
+                    lockeeUid,
+                    senderFriendCode
+                );
+                return (
+                    ActionResultBuilder.Fail<bool>(ActionResultEc.TargetHasNotGrantedSenderPermissions),
+                    string.Empty,
+                    string.Empty
+                );
+            }
+
+            userPriority = permissions.PermissionsGrantedTo.Priority;
+        }
+        else
+        {
+            logger.LogInformation(
+                "[LocksHandler] Self-unlock: Sender is same as Lockee"
             );
-            return (
-                ActionResultBuilder.Fail<bool>(ActionResultEc.TargetHasNotGrantedSenderPermissions),
-                string.Empty,
-                string.Empty
-            );
+            userPriority = RelationshipPriority.Devotional;
         }
 
         var existingLock = await lockService.GetLockAsync(lockId, lockeeUid);
@@ -245,7 +265,7 @@ public class LocksHandler(
         var canUnlock = await lockService.CanUnlockAsync(
             password,
             senderProfile.Value.Id,
-            (int)permissions.PermissionsGrantedTo.Priority,
+            (int)userPriority,
             lockId,
             lockeeProfile.Value.Id
         );
@@ -283,7 +303,7 @@ public class LocksHandler(
     public async Task<ActionResult<bool>> CheckCanModifySlotAsync(
         string senderFriendCode,
         string lockeeFriendCode,
-        string lockId
+        LockKind lockId
     )
     {
         var existingLock = await lockService.GetLockAsync(lockId, lockeeFriendCode);
@@ -316,7 +336,7 @@ public class LocksHandler(
         }
 
         var canUnlock = Locks.CanUnlock(
-            senderProfile.Value.Id,
+            senderFriendCode,
             existingLock.Value,
             permissions.PermissionsGrantedTo.Priority
         );
@@ -329,22 +349,18 @@ public class LocksHandler(
         return ActionResultBuilder.Ok(true);
     }
 
-    private static string GetLockType(string lockId)
+    private static InteractionPerms GetRequiredPermissionForLock(LockKind lockKind)
     {
-        var parts = lockId.Split('-', 2);
-        return parts.Length >= 1 ? parts[0] : lockId;
-    }
-
-    private static InteractionPerms GetRequiredPermissionForLock(string lockType)
-    {
-        return lockType.ToLowerInvariant() switch
-        {
-            "wardrobe" => InteractionPerms.CanLockWardrobe,
-            "gag" => InteractionPerms.CanLockGag,
-            "garbler" => InteractionPerms.CanLockGarbler,
-            "garblerchannels" => InteractionPerms.CanLockGarblerChannels,
-            "moodles" => InteractionPerms.CanLockMoodles,
-            _ => InteractionPerms.None,
-        };
+        // Based on the LockKind prefix, determine the required permission
+        var name = lockKind.ToString();
+        if (name.StartsWith("Wardrobe"))
+            return InteractionPerms.CanLockWardrobe;
+        if (name.StartsWith("Gag"))
+            return InteractionPerms.CanLockGag;
+        if (name.StartsWith("Garbler"))
+            return InteractionPerms.CanLockGarbler;
+        if (name.StartsWith("Moodles"))
+            return InteractionPerms.CanLockMoodles;
+        return InteractionPerms.None;
     }
 }

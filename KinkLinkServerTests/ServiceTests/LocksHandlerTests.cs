@@ -61,16 +61,16 @@ public class LocksHandlerTests : DatabaseServiceTestBase
     {
         await Fixture.ResetDatabaseAsync();
 
-        var (_, lockeeProfileId, lockeeUid) = await CreateTestUserWithProfileAsync(
+        var (_, _, lockeeUid) = await CreateTestUserWithProfileAsync(
             111111111111111051, "LOCKEE10");
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, _, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222051, "LOCKER10");
 
         await _lockService.AddOrUpdateLockAsync(new LockInfoDto
         {
-            LockID = "test-lock-1",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
         });
@@ -78,7 +78,7 @@ public class LocksHandlerTests : DatabaseServiceTestBase
         var result = await _locksHandler.GetAllLocksForUserAsync(lockeeUid);
 
         Assert.Single(result);
-        Assert.Equal("test-lock-1", result[0].LockID);
+        Assert.Equal(LockKind.WardrobeHead, result[0].LockID);
     }
 
     #endregion
@@ -113,16 +113,16 @@ public class LocksHandlerTests : DatabaseServiceTestBase
     {
         await Fixture.ResetDatabaseAsync();
 
-        var (_, lockeeProfileId, lockeeUid) = await CreateTestUserWithProfileAsync(
+        var (_, _, lockeeUid) = await CreateTestUserWithProfileAsync(
             111111111111111053, "PAIRLOCK1");
-        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
+        var (_, _, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222053, "PAIRLOCK2");
 
         await _lockService.AddOrUpdateLockAsync(new LockInfoDto
         {
-            LockID = "pair-lock-1",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Devotional,
             CanSelfUnlock = true,
             Password = "secret",
@@ -131,7 +131,7 @@ public class LocksHandlerTests : DatabaseServiceTestBase
         var result = await _locksHandler.GetLocksForPairAsync(lockeeUid, lockerUid);
 
         Assert.Single(result);
-        Assert.Equal("pair-lock-1", result[0].LockID);
+        Assert.Equal(LockKind.WardrobeHead, result[0].LockID);
         Assert.Equal(RelationshipPriority.Devotional, result[0].LockPriority);
         Assert.True(result[0].CanSelfUnlock);
         Assert.Equal("secret", result[0].Password);
@@ -151,9 +151,9 @@ public class LocksHandlerTests : DatabaseServiceTestBase
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "wardrobe-hat",
-            LockeeID = 99999,
-            LockerID = 0,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = "NONEXISTENT_LOCKEE",
+            LockerID = senderUid,
             LockPriority = RelationshipPriority.Casual,
         };
 
@@ -177,7 +177,7 @@ public class LocksHandlerTests : DatabaseServiceTestBase
             222222222222222062, "RMVLOCK2");
 
         var (result, _, _) = await _locksHandler.HandleRemoveLockAsync(
-            uid1, "some-lock", uid2, null);
+            uid1, LockKind.WardrobeHead, uid2, null);
 
         Assert.Equal(ActionResultEc.TargetNotFriends, result.Result);
     }
@@ -207,7 +207,7 @@ public class LocksHandlerTests : DatabaseServiceTestBase
         });
 
         var (result, _, _) = await _locksHandler.HandleRemoveLockAsync(
-            lockerUid, "nonexistent-lock", lockeeUid, null);
+            lockerUid, LockKind.WardrobeChest, lockeeUid, null);
 
         Assert.Equal(ActionResultEc.LockNotFound, result.Result);
     }
@@ -226,7 +226,7 @@ public class LocksHandlerTests : DatabaseServiceTestBase
         var (_, _, uid2) = await CreateTestUserWithProfileAsync(
             222222222222222067, "MODSLOT2");
 
-        var result = await _locksHandler.CheckCanModifySlotAsync(uid1, uid2, "wardrobe-hat");
+        var result = await _locksHandler.CheckCanModifySlotAsync(uid1, uid2, LockKind.WardrobeHead);
 
         Assert.Equal(ActionResultEc.Success, result.Result);
         Assert.True(result.Value);
@@ -258,18 +258,18 @@ public class LocksHandlerTests : DatabaseServiceTestBase
         });
 
         // Low priority lock placed by someone else
-        var (_, otherId, _) = await CreateTestUserWithProfileAsync(
+        var (_, _, otherUid) = await CreateTestUserWithProfileAsync(
             333333333333333068, "MODSLOT4B");
         await _lockService.AddOrUpdateLockAsync(new LockInfoDto
         {
-            LockID = "wardrobe-hat",
-            LockeeID = lockeeProfileId,
-            LockerID = otherId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = otherUid,
             LockPriority = RelationshipPriority.Casual,
         });
 
         // High priority user can modify
-        var result = await _locksHandler.CheckCanModifySlotAsync(lockerUid, lockeeUid, "wardrobe-hat");
+        var result = await _locksHandler.CheckCanModifySlotAsync(lockerUid, lockeeUid, LockKind.WardrobeHead);
 
         Assert.Equal(ActionResultEc.Success, result.Result);
         Assert.True(result.Value);
@@ -282,19 +282,19 @@ public class LocksHandlerTests : DatabaseServiceTestBase
 
         var (_, lockeeProfileId, lockeeUid) = await CreateTestUserWithProfileAsync(
             111111111111111069, "MODSLOT5");
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, _, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222069, "MODSLOT6");
 
         // Lock exists but no permissions pair
         await _lockService.AddOrUpdateLockAsync(new LockInfoDto
         {
-            LockID = "wardrobe-hat",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Serious,
         });
 
-        var result = await _locksHandler.CheckCanModifySlotAsync("UNAUTH1", lockeeUid, "wardrobe-hat");
+        var result = await _locksHandler.CheckCanModifySlotAsync("UNAUTH1", lockeeUid, LockKind.WardrobeHead);
 
         Assert.Equal(ActionResultEc.TargetNotFriends, result.Result);
         Assert.False(result.Value);
@@ -307,15 +307,15 @@ public class LocksHandlerTests : DatabaseServiceTestBase
 
         var (_, lockeeProfileId, lockeeUid) = await CreateTestUserWithProfileAsync(
             111111111111111070, "MODSLOT8");
-        var (_, lowLockerId, _) = await CreateTestUserWithProfileAsync(
+        var (_, _, lowLockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222070, "MODSLOT9");
 
         // Low priority lock
         await _lockService.AddOrUpdateLockAsync(new LockInfoDto
         {
-            LockID = "wardrobe-hat",
-            LockeeID = lockeeProfileId,
-            LockerID = lowLockerId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = lowLockerUid,
             LockPriority = RelationshipPriority.Casual,
         });
 
@@ -337,7 +337,7 @@ public class LocksHandlerTests : DatabaseServiceTestBase
         });
 
         var result = await _locksHandler.CheckCanModifySlotAsync(
-            highUid, lockeeUid, "wardrobe-hat");
+            highUid, lockeeUid, LockKind.WardrobeHead);
 
         Assert.Equal(ActionResultEc.Success, result.Result);
         Assert.True(result.Value);

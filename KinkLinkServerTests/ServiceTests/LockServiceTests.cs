@@ -56,16 +56,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "LOCKEE1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER1"
         );
 
         var lock1 = new LockInfoDto
         {
-            LockID = "lock_id_1",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = null,
@@ -73,9 +73,9 @@ public class LockServiceTests : DatabaseServiceTestBase
         };
         var lock2 = new LockInfoDto
         {
-            LockID = "lock_id_2",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeChest,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Serious,
             CanSelfUnlock = true,
             Expires = DateTime.UtcNow.AddDays(7),
@@ -87,11 +87,11 @@ public class LockServiceTests : DatabaseServiceTestBase
         var result = await _lockService.GetAllLocksForUserAsync(lockeeUid);
 
         Assert.Equal(2, result.Count);
-        var lockResult1 = result.First(r => r.LockID == "lock_id_1");
+        var lockResult1 = result.First(r => r.LockID == LockKind.WardrobeHead);
         Assert.Equal(RelationshipPriority.Casual, lockResult1.LockPriority);
         Assert.False(lockResult1.CanSelfUnlock);
         Assert.Null(lockResult1.Password);
-        var lockResult2 = result.First(r => r.LockID == "lock_id_2");
+        var lockResult2 = result.First(r => r.LockID == LockKind.WardrobeChest);
         Assert.Equal(RelationshipPriority.Serious, lockResult2.LockPriority);
         Assert.True(lockResult2.CanSelfUnlock);
         Assert.Equal("secret", lockResult2.Password);
@@ -102,7 +102,7 @@ public class LockServiceTests : DatabaseServiceTestBase
     {
         await Fixture.ResetDatabaseAsync();
 
-        var result = await _lockService.GetLockAsync("any_lock", "NONEXISTENT");
+        var result = await _lockService.GetLockAsync(LockKind.WardrobeHead, "NONEXISTENT");
 
         Assert.Null(result);
     }
@@ -114,7 +114,7 @@ public class LockServiceTests : DatabaseServiceTestBase
 
         var (_, _, uid) = await CreateTestUserWithProfileAsync(111111111111111111, "NOLOCK2");
 
-        var result = await _lockService.GetLockAsync("nonexistent_lock", uid);
+        var result = await _lockService.GetLockAsync(LockKind.WardrobeHead, uid);
 
         Assert.Null(result);
     }
@@ -128,16 +128,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "GETLOCK1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER2"
         );
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "get_lock_test",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeHands,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Devotional,
             CanSelfUnlock = true,
             Expires = DateTime.UtcNow.AddDays(30),
@@ -145,13 +145,13 @@ public class LockServiceTests : DatabaseServiceTestBase
         };
         await _lockService.AddOrUpdateLockAsync(lockInfo);
 
-        var result = await _lockService.GetLockAsync("get_lock_test", lockeeUid);
+        var result = await _lockService.GetLockAsync(LockKind.WardrobeHands, lockeeUid);
 
         Assert.NotNull(result);
         var r = (LockInfoDto)result!;
-        Assert.Equal("get_lock_test", r.LockID);
-        Assert.Equal(lockeeProfileId, r.LockeeID);
-        Assert.Equal(lockerProfileId, r.LockerID);
+        Assert.Equal(LockKind.WardrobeHands, r.LockID);
+        Assert.Equal(lockeeUid, r.LockeeID);
+        Assert.Equal(lockerUid, r.LockerID);
         Assert.Equal(RelationshipPriority.Devotional, r.LockPriority);
         Assert.True(r.CanSelfUnlock);
         Assert.NotNull(r.Expires);
@@ -167,16 +167,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "ADDLOCK1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER3"
         );
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "new_lock_id",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeLegs,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = null,
@@ -187,12 +187,12 @@ public class LockServiceTests : DatabaseServiceTestBase
 
         Assert.True(success);
         var allLocks = await _lockService.GetAllLocksForUserAsync(lockeeUid);
-        var fetched = allLocks.FirstOrDefault(l => l.LockID == "new_lock_id");
+        var fetched = allLocks.FirstOrDefault(l => l.LockID == LockKind.WardrobeLegs);
         Assert.NotNull(fetched);
         var r = fetched;
-        Assert.Equal("new_lock_id", r.LockID);
-        Assert.Equal(lockeeProfileId, r.LockeeID);
-        Assert.Equal(lockerProfileId, r.LockerID);
+        Assert.Equal(LockKind.WardrobeLegs, r.LockID);
+        Assert.Equal(lockeeUid, r.LockeeID);
+        Assert.Equal(lockerUid, r.LockerID);
         Assert.Equal(RelationshipPriority.Casual, r.LockPriority);
         Assert.False(r.CanSelfUnlock);
         Assert.Null(r.Expires);
@@ -208,16 +208,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "UPDLOCK1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER4"
         );
 
         var original = new LockInfoDto
         {
-            LockID = "update_lock_test",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeFeet,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = null,
@@ -227,9 +227,9 @@ public class LockServiceTests : DatabaseServiceTestBase
 
         var updated = new LockInfoDto
         {
-            LockID = "update_lock_test",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeFeet,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Serious,
             CanSelfUnlock = true,
             Expires = DateTime.UtcNow.AddDays(14),
@@ -239,7 +239,7 @@ public class LockServiceTests : DatabaseServiceTestBase
 
         Assert.True(success);
         var allLocksUpdated = await _lockService.GetAllLocksForUserAsync(lockeeUid);
-        var fetched = allLocksUpdated.FirstOrDefault(l => l.LockID == "update_lock_test");
+        var fetched = allLocksUpdated.FirstOrDefault(l => l.LockID == LockKind.WardrobeFeet);
         Assert.NotNull(fetched);
         var r = fetched;
         Assert.Equal(RelationshipPriority.Serious, r.LockPriority);
@@ -253,7 +253,7 @@ public class LockServiceTests : DatabaseServiceTestBase
     {
         await Fixture.ResetDatabaseAsync();
 
-        var result = await _lockService.RemoveLockAsync("any_lock", 12345);
+        var result = await _lockService.RemoveLockAsync(LockKind.WardrobeHead, 12345);
 
         Assert.False(result);
     }
@@ -265,7 +265,7 @@ public class LockServiceTests : DatabaseServiceTestBase
 
         var (_, id, _) = await CreateTestUserWithProfileAsync(111111111111111111, "RMLOCK1");
 
-        var result = await _lockService.RemoveLockAsync("nonexistent_lock", id);
+        var result = await _lockService.RemoveLockAsync(LockKind.WardrobeHead, id);
 
         Assert.False(result);
     }
@@ -279,16 +279,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "RMLOCK2"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER5"
         );
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "remove_lock_test",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeEars,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = null,
@@ -296,10 +296,10 @@ public class LockServiceTests : DatabaseServiceTestBase
         };
         await _lockService.AddOrUpdateLockAsync(lockInfo);
 
-        var result = await _lockService.RemoveLockAsync("remove_lock_test", lockeeProfileId);
+        var result = await _lockService.RemoveLockAsync(LockKind.WardrobeEars, lockeeProfileId);
 
         Assert.True(result);
-        var remaining = await _lockService.GetLockAsync("remove_lock_test", lockeeUid);
+        var remaining = await _lockService.GetLockAsync(LockKind.WardrobeEars, lockeeUid);
         Assert.Null(remaining);
     }
 
@@ -322,16 +322,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "RMALL1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER6"
         );
 
         var lock1 = new LockInfoDto
         {
-            LockID = "remove_all_1",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeNeck,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = null,
@@ -339,9 +339,9 @@ public class LockServiceTests : DatabaseServiceTestBase
         };
         var lock2 = new LockInfoDto
         {
-            LockID = "remove_all_2",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeWrists,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Serious,
             CanSelfUnlock = false,
             Expires = null,
@@ -349,9 +349,9 @@ public class LockServiceTests : DatabaseServiceTestBase
         };
         var lock3 = new LockInfoDto
         {
-            LockID = "remove_all_3",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeRFinger,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Devotional,
             CanSelfUnlock = false,
             Expires = null,
@@ -377,16 +377,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "PURGE1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER7"
         );
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "future_lock",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeLFinger,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = DateTime.UtcNow.AddDays(30),
@@ -397,7 +397,7 @@ public class LockServiceTests : DatabaseServiceTestBase
         var result = await _lockService.PurgeExpiredLocksAsync();
 
         Assert.Equal(0, result);
-        var remaining = await _lockService.GetLockAsync("future_lock", lockeeUid);
+        var remaining = await _lockService.GetLockAsync(LockKind.WardrobeLFinger, lockeeUid);
         Assert.NotNull(remaining);
     }
 
@@ -410,16 +410,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "PURGE2"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER8"
         );
 
         var expiredLock = new LockInfoDto
         {
-            LockID = "expired_lock",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeMods,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = DateTime.UtcNow.AddDays(-1),
@@ -427,9 +427,9 @@ public class LockServiceTests : DatabaseServiceTestBase
         };
         var validLock = new LockInfoDto
         {
-            LockID = "valid_lock",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeOutfit1,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Serious,
             CanSelfUnlock = false,
             Expires = DateTime.UtcNow.AddDays(30),
@@ -441,9 +441,9 @@ public class LockServiceTests : DatabaseServiceTestBase
         var result = await _lockService.PurgeExpiredLocksAsync();
 
         Assert.Equal(1, result);
-        var remaining = await _lockService.GetLockAsync("expired_lock", lockeeUid);
+        var remaining = await _lockService.GetLockAsync(LockKind.WardrobeMods, lockeeUid);
         Assert.Null(remaining);
-        var stillValid = await _lockService.GetLockAsync("valid_lock", lockeeUid);
+        var stillValid = await _lockService.GetLockAsync(LockKind.WardrobeOutfit1, lockeeUid);
         Assert.NotNull(stillValid);
     }
 
@@ -456,16 +456,16 @@ public class LockServiceTests : DatabaseServiceTestBase
             111111111111111111,
             "HASEXP1"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKER9"
         );
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "future_lock_check",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeHead,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = DateTime.UtcNow.AddDays(10),
@@ -483,20 +483,20 @@ public class LockServiceTests : DatabaseServiceTestBase
     {
         await Fixture.ResetDatabaseAsync();
 
-        var (_, lockeeProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockeeProfileId, lockeeUid) = await CreateTestUserWithProfileAsync(
             111111111111111111,
             "HASEXP2"
         );
-        var (_, lockerProfileId, _) = await CreateTestUserWithProfileAsync(
+        var (_, lockerProfileId, lockerUid) = await CreateTestUserWithProfileAsync(
             222222222222222222,
             "LOCKERA"
         );
 
         var lockInfo = new LockInfoDto
         {
-            LockID = "expired_lock_check",
-            LockeeID = lockeeProfileId,
-            LockerID = lockerProfileId,
+            LockID = LockKind.WardrobeChest,
+            LockeeID = lockeeUid,
+            LockerID = lockerUid,
             LockPriority = RelationshipPriority.Casual,
             CanSelfUnlock = false,
             Expires = DateTime.UtcNow.AddDays(-5),

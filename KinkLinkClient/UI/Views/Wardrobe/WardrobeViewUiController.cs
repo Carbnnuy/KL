@@ -193,35 +193,32 @@ public class WardrobeViewUiController
         _wardrobeNetworkService = wardrobeNetworkService;
     }
 
-    public string GetWardrobeLockId(string slotName)
+    public LockKind GetWardrobeLockId(WardrobeLayer layer)
     {
-        return $"wardrobe-{slotName.ToLowerInvariant()}";
+        return LockKindExtensions.From(layer);
     }
 
-    public bool IsSlotLocked(string slotName)
+    public bool IsSlotLocked(WardrobeLayer layer)
     {
-        var lockId = GetWardrobeLockId(slotName);
+        var lockId = GetWardrobeLockId(layer);
         return _lockService.IsLocked(lockId);
     }
 
-    public LockInfoDto? GetSlotLock(string slotName)
+    public LockInfoDto? GetSlotLock(WardrobeLayer layer)
     {
-        var lockId = GetWardrobeLockId(slotName);
+        var lockId = GetWardrobeLockId(layer);
         return _lockService.GetLock(lockId);
     }
 
-    public bool CanEquipToSlot(string slotName)
+    public bool CanEquipToSlot(WardrobeLayer layer)
     {
-        return !IsSlotLocked(slotName);
+        return !IsSlotLocked(layer);
     }
 
-    public bool CanRemoveFromSlot(string slotName)
+    public bool CanRemoveFromSlot(WardrobeLayer layer)
     {
-        if (!IsSlotLocked(slotName))
-            return true;
-
-        var lockInfo = GetSlotLock(slotName);
-        return lockInfo?.CanSelfUnlock ?? false;
+        // Must unlock first before removing
+        return !IsSlotLocked(layer);
     }
 
     public void SaveSlotData()

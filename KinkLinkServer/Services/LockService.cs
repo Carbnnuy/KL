@@ -4,6 +4,8 @@ using KinkLinkCommon.Domain.Enums;
 using KinkLinkServer.Domain;
 using Microsoft.Extensions.Logging;
 
+// ReSharper disable LoopCanBeConvertedToQuery
+
 namespace KinkLinkServer.Services;
 
 public class LockService
@@ -29,20 +31,35 @@ public class LockService
 
         var rows = await _locksSql.GetLocksForLockeeAsync(new(profile.Value.Id));
 
-        return rows.Select(row => new LockInfoDto
+        // Cache resolved locker profiles keyed by profile ID to avoid N+1 queries
+        var lockerProfileCache = new Dictionary<int, string>();
+        var result = new List<LockInfoDto>(rows.Count);
+        foreach (var row in rows)
         {
-            LockID = row.LockId,
-            LockeeID = row.LockeeId,
-            LockerID = row.LockerId,
-            LockPriority = (RelationshipPriority)row.LockPriority,
-            CanSelfUnlock = row.CanSelfUnlock,
-            Expires = row.Expires,
-            Password = row.Password,
-        })
-            .ToList();
+            // Resolve locker UID, using cache to avoid repeated DB queries
+            if (!lockerProfileCache.TryGetValue(row.LockerId, out var lockerUid))
+            {
+                var fetched = await _profilesSql.GetProfileByIdAsync(new(row.LockerId));
+                lockerUid = fetched?.Uid ?? row.LockerId.ToString();
+                lockerProfileCache[row.LockerId] = lockerUid;
+            }
+
+            result.Add(new LockInfoDto
+            {
+                LockID = (LockKind)row.LockId,
+                LockeeID = profile.Value.Uid,
+                LockerID = lockerUid,
+                LockPriority = (RelationshipPriority)row.LockPriority,
+                CanSelfUnlock = row.CanSelfUnlock,
+                Expires = row.Expires,
+                Password = row.Password,
+            });
+        }
+
+        return result;
     }
 
-    public async Task<LockInfoDto?> GetLockAsync(string lockId, string lockeeUid)
+    public async Task<LockInfoDto?> GetLockAsync(LockKind lockId, string lockeeUid)
     {
         var profile = await _profilesSql.GetProfileByUidAsync(new(lockeeUid));
         if (profile is null)
@@ -50,17 +67,19 @@ public class LockService
             return null;
         }
 
-        var row = await _locksSql.GetLockByIdAsync(new(lockId, profile.Value.Id));
+        var row = await _locksSql.GetLockByIdAsync(new((int)lockId, profile.Value.Id));
         if (row is null)
         {
             return null;
         }
 
+        // Single profile lookup after lock query (acceptable, not N+1)
+        var lockerProfile = await _profilesSql.GetProfileByIdAsync(new(row.Value.LockerId));
         return new LockInfoDto
         {
-            LockID = row.Value.LockId,
-            LockeeID = row.Value.LockeeId,
-            LockerID = row.Value.LockerId,
+            LockID = (LockKind)row.Value.LockId,
+            LockeeID = profile.Value.Uid,
+            LockerID = lockerProfile?.Uid ?? row.Value.LockerId.ToString(),
             LockPriority = (RelationshipPriority)row.Value.LockPriority,
             CanSelfUnlock = row.Value.CanSelfUnlock,
             Expires = row.Value.Expires,
@@ -70,11 +89,24 @@ public class LockService
 
     public async Task<bool> AddOrUpdateLockAsync(LockInfoDto lockInfo)
     {
+        var lockeeProfile = await _profilesSql.GetProfileByUidAsync(new(lockInfo.LockeeID));
+        var lockerProfile = await _profilesSql.GetProfileByUidAsync(new(lockInfo.LockerID));
+
+        if (lockeeProfile is null || lockerProfile is null)
+        {
+            _logger.LogError(
+                "AddOrUpdateLockAsync: profile lookup failed for lockee={LockeeId} locker={LockerId}",
+                lockInfo.LockeeID,
+                lockInfo.LockerID
+            );
+            return false;
+        }
+
         var row = await _locksSql.AddOrUpdateLockAsync(
             new(
-                lockInfo.LockID,
-                lockInfo.LockeeID,
-                lockInfo.LockerID,
+                (int)lockInfo.LockID,
+                lockeeProfile.Value.Id,
+                lockerProfile.Value.Id,
                 (int)lockInfo.LockPriority,
                 lockInfo.CanSelfUnlock,
                 lockInfo.Expires,
@@ -94,9 +126,9 @@ public class LockService
         return true;
     }
 
-    public async Task<bool> RemoveLockAsync(string lockId, int lockeeId)
+    public async Task<bool> RemoveLockAsync(LockKind lockId, int lockeeId)
     {
-        var result = await _locksSql.RemoveLockAsync(new(lockId, lockeeId));
+        var result = await _locksSql.RemoveLockAsync(new((int)lockId, lockeeId));
         if (result is null)
         {
             return false;
@@ -158,17 +190,41 @@ public class LockService
             pairFriendCodeUid
         );
 
-        return rows.Select(row => new LockInfoDto
+        // Cache resolved profile UIDs to avoid N+1 queries
+        var lockeeCache = new Dictionary<int, string>();
+        var lockerCache = new Dictionary<int, string>();
+        var result = new List<LockInfoDto>(rows.Count);
+        foreach (var row in rows)
         {
-            LockID = row.LockId,
-            LockeeID = row.LockeeId,
-            LockerID = row.LockerId,
-            LockPriority = (RelationshipPriority)row.LockPriority,
-            CanSelfUnlock = row.CanSelfUnlock,
-            Expires = row.Expires,
-            Password = row.Password,
-        })
-            .ToList();
+            // Resolve lockee UID with cache
+            if (!lockeeCache.TryGetValue(row.LockeeId, out var lockeeUid))
+            {
+                var fetched = await _profilesSql.GetProfileByIdAsync(new(row.LockeeId));
+                lockeeUid = fetched?.Uid ?? row.LockeeId.ToString();
+                lockeeCache[row.LockeeId] = lockeeUid;
+            }
+
+            // Resolve locker UID with cache
+            if (!lockerCache.TryGetValue(row.LockerId, out var lockerUid))
+            {
+                var fetched = await _profilesSql.GetProfileByIdAsync(new(row.LockerId));
+                lockerUid = fetched?.Uid ?? row.LockerId.ToString();
+                lockerCache[row.LockerId] = lockerUid;
+            }
+
+            result.Add(new LockInfoDto
+            {
+                LockID = (LockKind)row.LockId,
+                LockeeID = lockeeUid,
+                LockerID = lockerUid,
+                LockPriority = (RelationshipPriority)row.LockPriority,
+                CanSelfUnlock = row.CanSelfUnlock,
+                Expires = row.Expires,
+                Password = row.Password,
+            });
+        }
+
+        return result;
     }
 
     public async Task<int> PurgeExpiredLocksAsync()
@@ -183,11 +239,11 @@ public class LockService
         return result?.HasExpired ?? false;
     }
 
-    public async Task<bool> IsSlotLockedAsync(int profileId, string slotName)
+    public async Task<bool> IsSlotLockedAsync(int profileId, LockKind lockKind)
     {
         try
         {
-            if (await _locksSql.IsLockedAsync(new(slotName, profileId)) is { } result)
+            if (await _locksSql.IsLockedAsync(new((int)lockKind, profileId)) is { } result)
             {
                 return result.IsLocked;
             }
@@ -197,12 +253,13 @@ public class LockService
         {
             _logger.LogError(
                 ex,
-                "Error checking if slot is locked for profileId: {ProfileId}, slotName: {SlotName} with {Message}",
+                "Error checking if slot is locked for profileId: {ProfileId}, lockKind: {LockKind} with {Message}",
                 profileId,
-                slotName,
+                lockKind,
                 ex.Message
             );
-            return false;
+            // Fail-closed: on DB error, assume locked to prevent unsafe modifications
+            return true;
         }
     }
 
@@ -210,7 +267,7 @@ public class LockService
         string? password,
         int unlocker,
         int userpriority,
-        string lockid,
+        LockKind lockKind,
         int lockee
     )
     {
@@ -218,7 +275,7 @@ public class LockService
         {
             if (
                 await _locksSql.CanUnlockByLockIdAsync(
-                    new(password, unlocker, userpriority, lockid, lockee)
+                    new(password, unlocker, userpriority, (int)lockKind, lockee)
                 ) is
                 { } result
             )
@@ -231,14 +288,15 @@ public class LockService
         {
             _logger.LogError(
                 ex,
-                "Error checking if slot is locked for lockid: {LockId}, unlocker: {Unlocker}, lockee: {Lockee}, userpriority: {UserPriority}, password: {Password} with {Message}",
-                lockid,
+                "Error checking unlockability for lockKind: {LockKind}, unlocker: {Unlocker}, lockee: {Lockee}, userpriority: {UserPriority}, password: {Password} with {Message}",
+                lockKind,
                 lockee,
                 unlocker,
                 userpriority,
                 password,
                 ex.Message
             );
+            // Fail-closed: on DB error, deny unlock to prevent unauthorized access
             return false;
         }
     }
